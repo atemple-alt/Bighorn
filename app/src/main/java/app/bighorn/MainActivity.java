@@ -7,6 +7,8 @@ import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInstaller;
 import android.graphics.Color;
+import android.media.MediaCodecInfo;
+import android.media.MediaCodecList;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -27,6 +29,10 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import androidx.media3.common.C;
+import androidx.media3.exoplayer.audio.AudioCapabilities;
+
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
@@ -37,6 +43,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * Bighorn for Android / Android TV.
@@ -51,6 +60,8 @@ public class MainActivity extends Activity {
     private static final String HOST = "bighorn.app";
     private static final String START_URL = "http://" + HOST + "/index.html";
     private static final String ACTION_INSTALL_STATUS = "app.bighorn.INSTALL_STATUS";
+    private static final int REQ_PLAY = 41;
+    private String pendingPlayerResult;
     private static final int BG = Color.rgb(4, 6, 13); // matches the launch intro
 
     private FrameLayout root;
@@ -83,7 +94,7 @@ public class MainActivity extends Activity {
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
         // The page checks for "BighornApp" to know it is running inside the app.
-        s.setUserAgentString(s.getUserAgentString() + " BighornApp/1.6.2");
+        s.setUserAgentString(s.getUserAgentString() + " BighornApp/1.7.0");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -164,6 +175,22 @@ public class MainActivity extends Activity {
             runOnUiThread(MainActivity.this::finish);
         }
 
+        /** Opens the native player with a JSON config from the page. */
+        @JavascriptInterface
+        public void playNative(final String configJson) {
+            runOnUiThread(() -> {
+                Intent i = new Intent(MainActivity.this, PlayerActivity.class)
+                        .putExtra(PlayerActivity.EXTRA_CONFIG, configJson);
+                startActivityForResult(i, REQ_PLAY);
+            });
+        }
+
+        /** Which video/audio formats this device can decode (or pass through to the TV/receiver). */
+        @JavascriptInterface
+        public String getCodecSupport() {
+            return codecSupportJson();
+        }
+
         /** Downloads the APK at url and hands it to Android's installer. Progress goes back to the page. */
         @JavascriptInterface
         public void installUpdate(final String url) {
@@ -230,6 +257,76 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             updateStatus("error", e.getMessage());
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private String codecSupportJson() {
+        Set<String> video = new LinkedHashSet<>();
+        Set<String> audio = new LinkedHashSet<>();
+        boolean hevc10 = false;
+        try {
+            for (MediaCodecInfo info : new MediaCodecList(MediaCodecList.ALL_CODECS).getCodecInfos()) {
+                if (info.isEncoder()) continue;
+                for (String type : info.getSupportedTypes()) {
+                    String t = type.toLowerCase(Locale.US);
+                    switch (t) {
+                        case "video/avc": video.add("h264"); break;
+                        case "video/hevc": video.add("hevc");
+                            try {
+                                for (MediaCodecInfo.CodecProfileLevel pl : info.getCapabilitiesForType(type).profileLevels) {
+                                    if (pl.profile == MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10) hevc10 = true;
+                                }
+                            } catch (Exception ignored) { }
+                            break;
+                        case "video/x-vnd.on2.vp9": video.add("vp9"); break;
+                        case "video/x-vnd.on2.vp8": video.add("vp8"); break;
+                        case "video/av01": video.add("av1"); break;
+                        case "video/mpeg2": video.add("mpeg2video"); break;
+                        case "video/mp4v-es": video.add("mpeg4"); break;
+                        case "audio/mp4a-latm": audio.add("aac"); break;
+                        case "audio/mpeg": audio.add("mp3"); break;
+                        case "audio/ac3": audio.add("ac3"); break;
+                        case "audio/eac3": case "audio/eac3-joc": audio.add("eac3"); break;
+                        case "audio/vnd.dts": audio.add("dts"); break;
+                        case "audio/vnd.dts.hd": audio.add("dts"); break;
+                        case "audio/true-hd": audio.add("truehd"); break;
+                        case "audio/opus": audio.add("opus"); break;
+                        case "audio/flac": audio.add("flac"); break;
+                        case "audio/vorbis": audio.add("vorbis"); break;
+                        case "audio/raw": audio.add("pcm_s16le"); audio.add("pcm_s24le"); break;
+                        default: break;
+                    }
+                }
+            }
+        } catch (Exception ignored) { }
+        // Surround formats the box can't decode itself may still pass through HDMI to the TV / soundbar.
+        try {
+            AudioCapabilities caps = AudioCapabilities.getCapabilities(this);
+            if (caps.supportsEncoding(C.ENCODING_AC3)) audio.add("ac3");
+            if (caps.supportsEncoding(C.ENCODING_E_AC3)) audio.add("eac3");
+            if (caps.supportsEncoding(C.ENCODING_DTS)) audio.add("dts");
+            if (caps.supportsEncoding(C.ENCODING_DOLBY_TRUEHD)) audio.add("truehd");
+        } catch (Throwable ignored) { }
+        video.add("h264");
+        audio.add("aac");
+        audio.add("mp3");
+        try {
+            JSONObject o = new JSONObject();
+            o.put("video", new JSONArray(video));
+            o.put("audio", new JSONArray(audio));
+            o.put("hevc10", hevc10);
+            return o.toString();
+        } catch (Exception e) {
+            return "{\"video\":[\"h264\"],\"audio\":[\"aac\",\"mp3\"]}";
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_PLAY) return;
+        String r = data != null ? data.getStringExtra(PlayerActivity.EXTRA_RESULT) : null;
+        pendingPlayerResult = r != null ? r : "{\"action\":\"back\",\"positionMs\":0}";
     }
 
     private static void copy(InputStream in, OutputStream out) throws IOException {
@@ -340,6 +437,11 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         web.onResume();
+        if (pendingPlayerResult != null) {
+            final String js = "window.bighornNativeDone&&window.bighornNativeDone(" + pendingPlayerResult + ")";
+            pendingPlayerResult = null;
+            web.post(() -> web.evaluateJavascript(js, null));
+        }
     }
 
     @Override

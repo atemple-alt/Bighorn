@@ -11,8 +11,8 @@ android {
         minSdk = 24
         // 34 keeps the classic (non edge-to-edge) window, so the keyboard never covers the sign-in fields.
         targetSdk = 34
-        versionCode = 13
-        versionName = "1.6.2"
+        versionCode = 14
+        versionName = "1.7.0"
     }
 
     // One fixed signing key for every build, so each new version installs over the old one
@@ -45,4 +45,11 @@ android {
         abortOnError = false
         checkReleaseBuilds = false
     }
+}
+
+dependencies {
+    // Android's video player (ExoPlayer), its HLS support, and its on-screen controls
+    implementation("androidx.media3:media3-exoplayer:1.5.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
+    implementation("androidx.media3:media3-ui:1.5.1")
 }

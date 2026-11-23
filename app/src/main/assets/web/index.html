@@ -320,7 +320,7 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '1.6.2';
+const CLIENT = 'Bighorn', VERSION = '1.7.0';
 const UPDATE_REPO = 'atemple-alt/Bighorn';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
 
@@ -414,7 +414,7 @@ const API = {
   similar: id => call(`/Items/${id}/Similar`, { query: { userId: S.userId, limit: 12, fields: FIELDS } }).then(r => r.Items || []),
   favorite: (id, on) => call(`/UserFavoriteItems/${id}`, { method: on ? 'POST' : 'DELETE', query: { userId: S.userId } }),
   genres: (types, parentId) => call('/Genres', { query: { userId: S.userId, includeItemTypes: types, parentId, recursive: true, sortBy: 'SortName' } }).then(r => r.Items || []),
-  playbackInfo: (id, start) => call(`/Items/${id}/PlaybackInfo`, { method: 'POST', query: { userId: S.userId }, body: { UserId: S.userId, DeviceProfile: deviceProfile(), StartTimeTicks: start || 0, AutoOpenLiveStream: true, MaxStreamingBitrate: 120000000 } }),
+  playbackInfo: (id, start, extra = {}) => call(`/Items/${id}/PlaybackInfo`, { method: 'POST', query: { userId: S.userId }, body: { UserId: S.userId, DeviceProfile: extra.profile || deviceProfile(), StartTimeTicks: start || 0, AutoOpenLiveStream: true, MaxStreamingBitrate: 120000000, ...(extra.body || {}) } }),
   report: (kind, body) => call('/Sessions/Playing' + ({ start: '', progress: '/Progress', stop: '/Stopped' }[kind]), { method: 'POST', body }),
   stopEncoding: psid => call('/Videos/ActiveEncodings', { method: 'DELETE', query: { deviceId, playSessionId: psid } }),
 };
@@ -445,6 +445,47 @@ const avatarUrl = u => S.demo || !u?.PrimaryImageTag ? null : `${S.server}/Users
 const hue = s => [...String(s)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
 
 /* ---------- playback device profile ---------- */
+/* ---------- Android's native player (inside the app) ---------- */
+const nativePlayerAvailable = () => IN_APP && !!window.BighornNative?.playNative;
+const useNativePlayer = () => nativePlayerAvailable() && prefs().on('nativePlayer');
+// What the box itself can play: asked from Android (hardware decoders + HDMI pass-through), so far more
+// files direct-play instead of being converted by the server.
+function nativeDeviceProfile() {
+  let c = { video: ['h264'], audio: ['aac', 'mp3'] };
+  try { c = JSON.parse(window.BighornNative.getCodecSupport()); } catch {}
+  const v = c.video.join(','), a = c.audio.join(',');
+  const tsAudio = ['aac', 'mp3', 'ac3', 'eac3'].filter(x => c.audio.includes(x)).join(',') || 'aac';
+  return {
+    MaxStreamingBitrate: 120000000, MaxStaticBitrate: 120000000,
+    DirectPlayProfiles: [
+      { Container: 'mp4,m4v,mov,mkv,webm,ts,m2ts,mpegts', Type: 'Video', VideoCodec: v, AudioCodec: a },
+      { Container: 'mp3,aac,m4a,flac,ogg,opus,wav', Type: 'Audio' },
+    ],
+    TranscodingProfiles: [{ Container: 'ts', Type: 'Video', VideoCodec: c.video.includes('hevc') ? 'h264,hevc' : 'h264', AudioCodec: tsAudio, Context: 'Streaming', Protocol: 'hls', MaxAudioChannels: '6', MinSegments: 1, BreakOnNonKeyFrames: true }],
+    ContainerProfiles: [],
+    CodecProfiles: c.hevc10 === false && c.video.includes('hevc')
+      ? [{ Type: 'Video', Codec: 'hevc', Conditions: [{ Condition: 'NotEquals', Property: 'VideoProfile', Value: 'Main 10', IsRequired: false }] }] : [],
+    SubtitleProfiles: [],
+  };
+}
+let nativeSession = null;
+// The native player reports back here when it closes.
+window.bighornNativeDone = res => {
+  const s = nativeSession; nativeSession = null;
+  if (!s) return;
+  const posTicks = Math.max(0, Math.round((res.positionMs || 0) * 1e4));
+  if (res.action === 'error') {
+    if (s.method === 'DirectPlay' && !s.opts.forceTranscode) {
+      toast('That file needs converting for this TV, switching streams…', 3000);
+      return play(s.item, { ...s.opts, forceTranscode: true, startTicks: posTicks });
+    }
+    toast('Playback failed: ' + (res.message || 'unknown error'), 6000);
+  }
+  if ((res.action === 'ended' || res.action === 'next') && s.next)
+    return play(s.next, s.queue ? { queue: s.queue.slice(1), fromStart: true } : {});
+  if (!$('.modal-ov')) route();
+};
+
 function deviceProfile() {
   const v = document.createElement('video');
   const can = t => v.canPlayType(t) !== '';
@@ -727,6 +768,7 @@ const ROW_SETTINGS = [
   { id: 'top10', label: 'Top 10 by Rating' },
   { id: 'mylist', label: 'My List', hint: 'Shown on Home' },
 ];
+const PLAYBACK_SETTINGS = [{ id: 'nativePlayer', label: "Use Android's video player", hint: 'Plays far more formats directly (HEVC, HDR, surround). Turn off to use the built-in web player.' }];
 const LOOK_SETTINGS = [
   { id: 'scene', label: 'Bighorn Mountains background', hint: 'Mountain scenery behind the rows and lists' },
   { id: 'intro', label: 'Launch intro', hint: 'The Bighorn animation when the app opens' },
@@ -757,6 +799,7 @@ async function renderSettings(page) {
   const box = $('.settings', page);
   box.innerHTML = `<h1>Settings</h1>
     <section><h2>Look</h2><div class="tgs">${LOOK_SETTINGS.map(r => toggle(r.id, r.label, r.hint)).join('')}</div></section>
+    ${nativePlayerAvailable() ? `<section><h2>Playback</h2><div class="tgs">${PLAYBACK_SETTINGS.map(r => toggle(r.id, r.label, r.hint)).join('')}</div></section>` : ''}
     <section><h2>Rows</h2><p class="sub2">Choose which rows appear on Home, TV Shows and Movies.</p>
       <div class="tgs">${ROW_SETTINGS.map(r => toggle(r.id, r.label, r.hint)).join('')}
       ${libs.map(v => toggle('latest:' + v.Id, `New in ${v.Name}`, 'Recently added to this library')).join('')}</div></section>
@@ -1186,14 +1229,38 @@ async function shufflePlay(series) {
   } catch (e) { toast("Couldn't shuffle: " + e.message); }
 }
 
+async function playNative({ it, url, method, ms, psid, start, opts }) {
+  let next = null;
+  if (opts.queue) next = opts.queue[0] || null;
+  else if (it.Type === 'Episode' && it.SeriesId) {
+    const l = await API.episodes(it.SeriesId, { startItemId: it.Id, limit: 2 }).catch(() => []);
+    next = l.find(e => e.Id !== it.Id) || null;
+  }
+  const segs = (await API.segments(it.Id).catch(() => []))
+    .filter(g => ['Intro', 'Recap', 'Outro'].includes(g.Type) && g.EndTicks > g.StartTicks)
+    .map(g => ({ type: g.Type, startMs: Math.round(g.StartTicks / 1e4), endMs: Math.round(g.EndTicks / 1e4) }));
+  const [title, sub] = cardTitle(it);
+  nativeSession = { item: it, next, queue: opts.queue, method, opts };
+  window.BighornNative.playNative(JSON.stringify({
+    url, isHls: /\.m3u8/i.test(url), title, subtitle: sub, startMs: Math.round(start / 1e4),
+    server: S.server, authHeader: authHeader(), deviceId,
+    itemId: it.Id, mediaSourceId: ms.Id, playSessionId: psid, playMethod: method,
+    segments: segs, hasNext: !!next,
+  }));
+}
+
 async function play(item, opts = {}) {
   hidePreview();
   try {
     if (item.Type === 'Series') { const ep = await nextEpisodeFor(item.Id); if (!ep) return toast('No playable episodes found.'); item = ep; }
     if (S.demo) { if (!opts.queue) toast('Demo mode shows the interface only. Connect to your Jellyfin server to play.'); return; }
     const it = await API.item(item.Id);
-    const start = opts.fromStart ? 0 : (it.UserData?.PlaybackPositionTicks || 0);
-    const pb = await API.playbackInfo(it.Id, start);
+    const start = opts.startTicks != null ? opts.startTicks : opts.fromStart ? 0 : (it.UserData?.PlaybackPositionTicks || 0);
+    const native = useNativePlayer();
+    const pb = await API.playbackInfo(it.Id, start, native ? {
+      profile: nativeDeviceProfile(),
+      body: { SubtitleStreamIndex: -1, ...(opts.forceTranscode ? { EnableDirectPlay: false } : {}) },
+    } : {});
     if (pb.ErrorCode) throw new Error(pb.ErrorCode);
     const ms = pb.MediaSources?.[0]; if (!ms) throw new Error('No media source');
     let url, method;
@@ -1205,6 +1272,7 @@ async function play(item, opts = {}) {
       url = S.server + ms.TranscodingUrl;
       if (!/api_key=/i.test(url)) url += `&api_key=${S.token}`;
     } else throw new Error("This file can't be played in this browser.");
+    if (native) return playNative({ it, url, method, ms, psid: pb.PlaySessionId, start, opts });
     openPlayer({ it, url, method, ms, psid: pb.PlaySessionId, start, queue: opts.queue });
   } catch (e) { toast('Playback failed: ' + e.message); }
 }
