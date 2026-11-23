@@ -320,7 +320,7 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '1.6.1';
+const CLIENT = 'Bighorn', VERSION = '1.6.2';
 const UPDATE_REPO = 'atemple-alt/Bighorn';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
 
@@ -1687,9 +1687,9 @@ function showUpdateBanner(u, focus) {
 /* ---------- boot ---------- */
 if (IN_APP || S.token) playIntro();
 if (S.token) { renderShell(); route(); }
-if (IN_APP) setTimeout(() => checkForUpdate(false), 7000);
 else if (S.server) renderProfiles();
 else renderConnect();
+if (IN_APP) setTimeout(() => checkForUpdate(false), 7000);
 </script>
 </body>
 </html>
