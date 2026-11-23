@@ -177,6 +177,16 @@ select.season{background:#242424;color:#fff;border:1px solid #4d4d4d;border-radi
 @keyframes i-rise{from{opacity:0;transform:translate3d(0,10%,0)}to{opacity:1;transform:none}}
 @keyframes i-b{from{opacity:0;transform:translate3d(0,18%,0) scale(.6)}to{opacity:1;transform:none}}
 @keyframes i-glow{0%{opacity:0}40%{opacity:1}100%{opacity:.85}}
+/* Quick Connect */
+.btn-alt{width:100%;padding:13px;border:1px solid rgba(255,255,255,.35);border-radius:4px;background:rgba(255,255,255,.06);color:#fff;font-weight:700;font-size:15px;margin-top:12px}
+.btn-alt:hover{background:rgba(255,255,255,.14)}
+.kbd .btn-alt:focus{box-shadow:0 0 0 3px #fff,0 0 0 7px rgba(0,164,220,.55)}
+.auth-box.qc{max-width:600px;margin-top:4vh;padding:36px 48px 40px;text-align:center}
+.qc h1{margin-bottom:10px}
+.qc-code{white-space:nowrap;font-size:clamp(40px,6vw,76px);font-weight:800;letter-spacing:.1em;margin:0 0 16px;font-variant-numeric:tabular-nums;background:linear-gradient(90deg,var(--a1),var(--a2));-webkit-background-clip:text;background-clip:text;color:transparent;min-height:1.2em}
+.qc-steps{text-align:left;color:#c8c8c8;line-height:1.6;font-size:15px;padding-left:22px;margin:0 0 16px}
+.qc-status{color:var(--a2);font-size:15px;min-height:1.4em}
+.qc-tile .av svg{font-size:.8em}
 /* Bighorn Mountains backdrop */
 .scene{position:fixed;inset:0;z-index:-1;background:#0b0f1e center bottom/cover no-repeat;pointer-events:none;transition:opacity .6s}
 .scene::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,20,20,.92) 0%,rgba(20,20,20,.7) 45%,rgba(20,20,20,.35) 100%);transition:background .6s}
@@ -315,6 +325,7 @@ function toast(msg, ms = 3800) { const t = h(`<div class="toast">${esc(msg)}</di
 
 const ICON = {
   play: '<svg viewBox="0 0 24 24"><path d="M6 4l15 8-15 8z"/></svg>',
+  qc: '<svg viewBox="0 0 24 24"><path d="M7 2h10a2 2 0 012 2v16a2 2 0 01-2 2H7a2 2 0 01-2-2V4a2 2 0 012-2zm0 3v13h10V5zm4 14.5a1 1 0 102 0 1 1 0 00-2 0zM9 9h6v2H9zm0 3h4v2H9z"/></svg>',
   pause: '<svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg>',
   info: '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 2a8 8 0 110 16 8 8 0 010-16zm-1 6v8h2v-8zm0-4v2h2V6z"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z"/></svg>',
@@ -359,6 +370,10 @@ const API = {
   publicInfo: () => call('/System/Info/Public'),
   publicUsers: () => call('/Users/Public'),
   login: (u, p) => call('/Users/AuthenticateByName', { method: 'POST', body: { Username: u, Pw: p } }),
+  qcEnabled: () => call('/QuickConnect/Enabled'),
+  qcInitiate: () => call('/QuickConnect/Initiate', { method: 'POST' }),
+  qcState: secret => call('/QuickConnect/Connect', { query: { secret } }),
+  qcAuth: secret => call('/Users/AuthenticateWithQuickConnect', { method: 'POST', body: { Secret: secret } }),
   logout: () => call('/Sessions/Logout', { method: 'POST' }),
   views: () => call('/UserViews', { query: { userId: S.userId } }).then(r => r.Items || []),
   resume: types => call('/UserItems/Resume', { query: { userId: S.userId, limit: 24, mediaTypes: 'Video', includeItemTypes: types, fields: FIELDS, enableImageTypes: IMG_TYPES } }).then(r => r.Items || []),
@@ -521,6 +536,12 @@ async function renderProfiles() {
   const other = h(`<button class="tile add"><div class="av">${ICON.plus}</div><div class="nm">${users.length ? 'Other user' : 'Sign in'}</div></button>`);
   other.onclick = () => renderLogin('');
   tiles.append(other);
+  API.qcEnabled().then(on => {
+    if (on !== true || !tiles.isConnected) return;
+    const qc = h(`<button class="tile add qc-tile"><div class="av">${ICON.qc}</div><div class="nm">Quick Connect</div></button>`);
+    qc.onclick = renderQuickConnect;
+    tiles.append(qc);
+  }).catch(() => {});
 }
 
 function renderLogin(name, msg = '') {
@@ -528,20 +549,72 @@ function renderLogin(name, msg = '') {
   app.innerHTML = `<div class="auth"><span class="logo">Bighorn</span><form class="auth-box"><h1>Sign in</h1><p class="err">${esc(msg)}</p>
     <input name="u" placeholder="Username" value="${esc(name)}" autocomplete="username" required>
     <input name="p" type="password" placeholder="Password" autocomplete="current-password">
-    <button class="btn-main">Sign In</button><p class="hint">Signing in to ${esc(S.serverName || S.server)}. <a class="back">Back to profiles</a></p></form></div>`;
+    <button class="btn-main">Sign In</button><button type="button" class="btn-alt qc-go">Use Quick Connect instead</button><p class="hint">Signing in to ${esc(S.serverName || S.server)}. <a class="back" tabindex="0">Back to profiles</a></p></form></div>`;
+  $('.qc-go', app).onclick = renderQuickConnect;
   const f = $('form', app);
   (name ? f.p : f.u).focus();
   $('.back', f).onclick = renderProfiles;
   f.onsubmit = e => { e.preventDefault(); doLogin(f.u.value, f.p.value); };
 }
 
+function finishLogin(r) {
+  Object.assign(S, { token: r.AccessToken, userId: r.User.Id, user: { Name: r.User.Name, Id: r.User.Id, PrimaryImageTag: r.User.PrimaryImageTag } });
+  saveSession(); cache.clear(); renderShell();
+  location.hash = '#/home'; route();
+  playIntro(); // a profile was just picked, so the browser allows sound
+}
+
+let qcRun = 0;
+async function renderQuickConnect() {
+  setAuthMode(true);
+  const run = ++qcRun;
+  app.innerHTML = `<div class="auth"><span class="logo">Bighorn</span><div class="auth-box qc">
+    <h1>Quick Connect</h1>
+    <div class="qc-code" aria-live="polite"><div class="spinner"></div></div>
+    <ol class="qc-steps"><li>On your phone or computer, open Jellyfin and sign in.</li>
+      <li>Open your user menu and choose <b>Quick Connect</b>.</li>
+      <li>Enter the code above and tap <b>Authorize</b>.</li></ol>
+    <p class="qc-status">Getting a code…</p>
+    <button class="btn-alt back">Back</button></div></div>`;
+  const codeEl = $('.qc-code', app), status = $('.qc-status', app);
+  $('.back', app).onclick = () => { qcRun++; renderProfiles(); };
+  $('.back', app).focus();
+  const live = () => run === qcRun && codeEl.isConnected;
+  const show = c => { codeEl.textContent = String(c).replace(/^(\d{3})(\d{3})$/, '$1 $2'); };
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  try {
+    let req = await API.qcInitiate();
+    if (!live()) return;
+    show(req.Code); status.textContent = 'Waiting for approval…';
+    let fails = 0;
+    while (live()) {
+      await sleep(3000);
+      if (!live()) return;
+      let st;
+      try { st = await API.qcState(req.Secret); fails = 0; }
+      catch (e) {
+        if (/^404/.test(e.message)) { req = await API.qcInitiate(); if (live()) { show(req.Code); status.textContent = 'That code expired, so here is a new one. Waiting for approval…'; } continue; }
+        if (++fails < 4) continue; // ride out brief network blips
+        throw e;
+      }
+      if (st && st.Authenticated) {
+        status.textContent = 'Approved! Signing in…';
+        finishLogin(await API.qcAuth(req.Secret));
+        return;
+      }
+    }
+  } catch (e) {
+    if (!live()) return;
+    codeEl.textContent = '—';
+    status.textContent = /^401/.test(e.message)
+      ? 'Quick Connect is turned off on this server. A Jellyfin admin can turn it on in the Dashboard (General settings), or sign in with a password instead.'
+      : "Couldn't start Quick Connect: " + e.message;
+  }
+}
+
 async function doLogin(u, p) {
   try {
-    const r = await API.login(u, p);
-    Object.assign(S, { token: r.AccessToken, userId: r.User.Id, user: { Name: r.User.Name, Id: r.User.Id, PrimaryImageTag: r.User.PrimaryImageTag } });
-    saveSession(); cache.clear(); renderShell();
-    location.hash = '#/home'; route();
-    playIntro(); // a profile was just picked, so the browser allows sound
+    finishLogin(await API.login(u, p));
   } catch (e) { renderLogin(u, 'Incorrect username or password.'); }
 }
 
@@ -1281,6 +1354,10 @@ function mock(path, { method, body, query: q }) {
   const seriesInfo = s => ({ ...s, ChildCount: D.seasons.filter(x => x.SeriesId === s.Id).length });
   if (path === '/System/Info/Public') return { ServerName: 'Demo Library', Version: '10.11.0' };
   if (path === '/Users/Public') return D.users;
+  if (path === '/QuickConnect/Enabled') return true;
+  if (path === '/QuickConnect/Initiate') { D.qcPolls = 0; return { Secret: 'demo-secret', Code: '482913', Authenticated: false }; }
+  if (path === '/QuickConnect/Connect') return { Secret: q.secret, Code: '482913', Authenticated: ++D.qcPolls >= 2 };
+  if (path === '/Users/AuthenticateWithQuickConnect') return { AccessToken: 'demo', User: D.users[0] };
   if (path === '/Users/AuthenticateByName') return { AccessToken: 'demo', User: D.users.find(u => u.Name.toLowerCase() === String(body.Username).toLowerCase()) || { Name: body.Username || 'Guest', Id: 'u9' } };
   if (path === '/Sessions/Logout') return null;
   if (path === '/UserViews') return { Items: D.views };
