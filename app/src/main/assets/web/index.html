@@ -161,6 +161,7 @@ select.season{background:#242424;color:#fff;border:1px solid #4d4d4d;border-radi
 
 /* auth */
 .auth{min-height:100vh;padding:24px var(--pad)}
+.ver{position:fixed;right:14px;bottom:10px;font-size:12px;color:rgba(255,255,255,.45);z-index:5}
 /* launch intro — each layer is a separate GPU-composited image; only transform/opacity animate */
 .intro{position:fixed;inset:0;z-index:1000;background:#04060d;overflow:hidden;cursor:pointer;contain:strict}
 .intro .il{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;opacity:0;will-change:transform,opacity;backface-visibility:hidden;pointer-events:none}
@@ -305,7 +306,7 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '1.0.0';
+const CLIENT = 'Bighorn', VERSION = '1.4.1';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
 
 /* ---------- small helpers ---------- */
@@ -536,12 +537,9 @@ async function renderProfiles() {
   const other = h(`<button class="tile add"><div class="av">${ICON.plus}</div><div class="nm">${users.length ? 'Other user' : 'Sign in'}</div></button>`);
   other.onclick = () => renderLogin('');
   tiles.append(other);
-  API.qcEnabled().then(on => {
-    if (on !== true || !tiles.isConnected) return;
-    const qc = h(`<button class="tile add qc-tile"><div class="av">${ICON.qc}</div><div class="nm">Quick Connect</div></button>`);
-    qc.onclick = renderQuickConnect;
-    tiles.append(qc);
-  }).catch(() => {});
+  const qc = h(`<button class="tile add qc-tile"><div class="av">${ICON.qc}</div><div class="nm">Quick Connect</div></button>`);
+  qc.onclick = renderQuickConnect;
+  tiles.prepend(qc); // first, since it's the easiest way to sign in with a TV remote
 }
 
 function renderLogin(name, msg = '') {
@@ -738,7 +736,7 @@ async function renderSettings(page) {
     <section><h2>Genre rows</h2><p class="sub2">A random mix of genres is picked each time a page opens.</p>
       <div class="gcount">${counts.map(n => `<button class="chip" data-n="${n}" aria-pressed="${P.genreCount === n}">${n === 0 ? 'Off' : n + ' rows'}</button>`).join('')}</div>
       ${genres.length ? `<p class="sub2" style="margin-top:22px">Genres to include</p><div class="tgs genres-list">${genres.map(g => toggle('genre:' + g.Name, g.Name)).join('')}</div>` : ''}</section>
-    <section><button class="btn more reset">Reset to defaults</button></section>`;
+    <section><button class="btn more reset">Reset to defaults</button><p class="sub2" style="margin-top:18px">Bighorn ${VERSION}</p></section>`;
   const genreList = $('.genres-list', box);
   const syncGenres = () => genreList && genreList.classList.toggle('dim', prefs().genreCount === 0);
   syncGenres();
@@ -1443,7 +1441,8 @@ function mountainScene() {
 </svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
-function setAuthMode(on) { document.body.classList.toggle('auth-on', on); if (on) document.body.classList.remove('no-scene'); else applyScene(); }
+function setAuthMode(on) {
+  if (on && !$('.ver')) document.body.append(h(`<div class="ver">Bighorn ${VERSION}</div>`)); else if (!on) $('.ver')?.remove(); document.body.classList.toggle('auth-on', on); if (on) document.body.classList.remove('no-scene'); else applyScene(); }
 function applyScene() { document.body.classList.toggle('no-scene', !prefs().on('scene')); }
 $('.scene').style.backgroundImage = `url("${mountainScene()}")`;
 
