@@ -11,8 +11,8 @@ android {
         minSdk = 24
         // 34 keeps the classic (non edge-to-edge) window, so the keyboard never covers the sign-in fields.
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.5.0"
+        versionCode = 10
+        versionName = "1.5.1"
     }
 
     buildTypes {
