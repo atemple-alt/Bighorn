@@ -320,7 +320,7 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '1.6.0';
+const CLIENT = 'Bighorn', VERSION = '1.6.1';
 const UPDATE_REPO = 'atemple-alt/Bighorn';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
 
@@ -394,7 +394,13 @@ const API = {
   qcAuth: secret => call('/Users/AuthenticateWithQuickConnect', { method: 'POST', body: { Secret: secret } }),
   logout: () => call('/Sessions/Logout', { method: 'POST' }),
   views: () => call('/UserViews', { query: { userId: S.userId } }).then(r => r.Items || []),
-  resume: types => call('/UserItems/Resume', { query: { userId: S.userId, limit: 24, mediaTypes: 'Video', includeItemTypes: types, fields: FIELDS, enableImageTypes: IMG_TYPES } }).then(r => r.Items || []),
+  // Continue Watching: one entry per show — the episode watched most recently — plus any part-watched movies.
+  resume: types => call('/UserItems/Resume', { query: { userId: S.userId, limit: 100, mediaTypes: 'Video', includeItemTypes: types, fields: FIELDS, enableImageTypes: IMG_TYPES } })
+    .then(r => {
+      const items = (r.Items || []).slice().sort((a, b) => String(b.UserData?.LastPlayedDate || '').localeCompare(String(a.UserData?.LastPlayedDate || '')));
+      const seen = new Set();
+      return items.filter(i => { const k = i.Type === 'Episode' && i.SeriesId ? 's:' + i.SeriesId : i.Id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 24);
+    }),
   nextUp: seriesId => call('/Shows/NextUp', { query: { userId: S.userId, seriesId, limit: 24, fields: FIELDS, enableImageTypes: IMG_TYPES } }).then(r => r.Items || []),
   latest: (parentId, types) => call('/Items/Latest', { query: { userId: S.userId, parentId, includeItemTypes: types, limit: 24, fields: FIELDS, enableImageTypes: IMG_TYPES } }),
   items: q => API.itemsPage(q).then(r => r.Items || []),
