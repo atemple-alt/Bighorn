@@ -120,7 +120,7 @@ svg{width:1em;height:1em;fill:currentColor;flex:none}
 .sec-h{display:flex;align-items:center;justify-content:space-between;margin:40px 0 16px}
 .sec-h h3{font-size:24px;margin:0}
 select.season{background:#242424;color:#fff;border:1px solid #4d4d4d;border-radius:4px;padding:10px 14px;font-size:16px;font-weight:700}
-.ep{display:grid;grid-template-columns:40px 160px 1fr;gap:18px;align-items:center;padding:20px 16px;border-bottom:1px solid #404040;border-radius:4px;cursor:pointer}
+.ep{display:grid;grid-template-columns:40px 160px 1fr 40px;gap:18px;align-items:center;padding:20px 16px;border-bottom:1px solid #404040;border-radius:4px;cursor:pointer}
 .ep:hover,.ep.cur{background:#333}
 .ep .n{font-size:24px;color:#d2d2d2;text-align:center}
 .ep .thumb{position:relative;aspect-ratio:16/9;border-radius:4px;overflow:hidden;background:#2a2a2a}
@@ -149,6 +149,9 @@ select.season{background:#242424;color:#fff;border:1px solid #4d4d4d;border-radi
 .ptitle span{font-weight:400;color:#bbb;margin-left:10px;font-size:16px}
 .player.idle .ptop{opacity:0}
 .player.idle{cursor:none}
+.skipbtn{position:absolute;right:40px;bottom:150px;background:rgba(20,20,20,.75);color:#fff;border:2px solid rgba(255,255,255,.85);border-radius:4px;padding:12px 24px;font-weight:700;font-size:17px;display:none;z-index:3}
+.skipbtn.show{display:block}
+.skipbtn:hover,.skipbtn:focus{background:#fff;color:#000;outline:0}
 .nextep{position:absolute;right:40px;bottom:90px;background:#fff;color:#000;border:0;border-radius:4px;padding:12px 22px;font-weight:700;font-size:16px;display:none}
 .nextep.show{display:block}
 
@@ -178,6 +181,17 @@ select.season{background:#242424;color:#fff;border:1px solid #4d4d4d;border-radi
 @keyframes i-rise{from{opacity:0;transform:translate3d(0,10%,0)}to{opacity:1;transform:none}}
 @keyframes i-b{from{opacity:0;transform:translate3d(0,18%,0) scale(.6)}to{opacity:1;transform:none}}
 @keyframes i-glow{0%{opacity:0}40%{opacity:1}100%{opacity:.85}}
+/* update banner */
+.upd{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:150;display:flex;align-items:center;gap:14px;background:rgba(16,16,28,.96);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:14px 18px;box-shadow:0 8px 30px rgba(0,0,0,.6);max-width:92vw;animation:fade .3s}
+.upd-t{display:flex;flex-direction:column;gap:3px;margin-right:8px;font-size:15px}
+.upd-s{color:#bbb;font-size:13px;max-width:420px}
+.upd .btn{font-size:15px;padding:.5em 1.2em}
+.upd .btn:disabled{opacity:.5}
+/* watched controls */
+.circle[aria-pressed="true"]{background:rgba(0,164,220,.35);border-color:var(--a2)}
+.textbtn{display:block;margin-top:14px;background:none;border:0;padding:4px 0;color:#d6d6d6;font-size:14px;text-decoration:underline;text-underline-offset:4px}
+.textbtn:hover,.kbd .textbtn:focus{color:#fff;outline:0;text-decoration-color:var(--a2)}
+.epw{width:34px;height:34px;font-size:16px}
 /* Quick Connect */
 .btn-alt{width:100%;padding:13px;border:1px solid rgba(255,255,255,.35);border-radius:4px;background:rgba(255,255,255,.06);color:#fff;font-weight:700;font-size:15px;margin-top:12px}
 .btn-alt:hover{background:rgba(255,255,255,.14)}
@@ -294,7 +308,7 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
   .hov{display:none}
   .mbody{padding:8px 20px 30px}.mh-info{left:20px;right:20px}
   .mgrid{grid-template-columns:1fr;gap:8px}
-  .ep{grid-template-columns:110px 1fr}.ep .n{display:none}
+  .ep{grid-template-columns:110px 1fr 36px}.ep .n{display:none}
   .auth-box{padding:36px 24px}
 }
 @media (max-width:560px){.hdr{flex-wrap:wrap;height:auto;padding-top:12px;padding-bottom:10px;row-gap:8px}.nav{order:5;width:100%;gap:20px}.nav a{font-size:13px}}
@@ -306,7 +320,8 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '1.5.1';
+const CLIENT = 'Bighorn', VERSION = '1.6.0';
+const UPDATE_REPO = 'atemple-alt/Bighorn';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
 
 /* ---------- small helpers ---------- */
@@ -328,6 +343,7 @@ const ICON = {
   play: '<svg viewBox="0 0 24 24"><path d="M6 4l15 8-15 8z"/></svg>',
   qc: '<svg viewBox="0 0 24 24"><path d="M7 2h10a2 2 0 012 2v16a2 2 0 01-2 2H7a2 2 0 01-2-2V4a2 2 0 012-2zm0 3v13h10V5zm4 14.5a1 1 0 102 0 1 1 0 00-2 0zM9 9h6v2H9zm0 3h4v2H9z"/></svg>',
   shuffle: '<svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>',
+  seen: '<svg viewBox="0 0 24 24"><path d="M12 5C7 5 2.7 8.1 1 12.5 2.7 16.9 7 20 12 20s9.3-3.1 11-7.5C21.3 8.1 17 5 12 5zm0 12.5a5 5 0 110-10 5 5 0 010 10zm0-8a3 3 0 100 6 3 3 0 000-6z"/></svg>',
   pause: '<svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg>',
   info: '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 2a8 8 0 110 16 8 8 0 010-16zm-1 6v8h2v-8zm0-4v2h2V6z"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z"/></svg>',
@@ -386,6 +402,9 @@ const API = {
   item: id => call(`/Items/${id}`, { query: { userId: S.userId } }),
   seasons: id => call(`/Shows/${id}/Seasons`, { query: { userId: S.userId } }).then(r => r.Items || []),
   episodes: (id, q = {}) => call(`/Shows/${id}/Episodes`, { query: { userId: S.userId, fields: 'Overview', ...q } }).then(r => r.Items || []),
+  markPlayed: (id, on) => call(`/UserPlayedItems/${id}`, { method: on ? 'POST' : 'DELETE', query: { userId: S.userId } }),
+  resetProgress: id => call(`/UserItems/${id}/UserData`, { method: 'POST', query: { userId: S.userId }, body: { PlaybackPositionTicks: 0 } }),
+  segments: id => call(`/MediaSegments/${id}`).then(r => r.Items || []),
   similar: id => call(`/Items/${id}/Similar`, { query: { userId: S.userId, limit: 12, fields: FIELDS } }).then(r => r.Items || []),
   favorite: (id, on) => call(`/UserFavoriteItems/${id}`, { method: on ? 'POST' : 'DELETE', query: { userId: S.userId } }),
   genres: (types, parentId) => call('/Genres', { query: { userId: S.userId, includeItemTypes: types, parentId, recursive: true, sortBy: 'SortName' } }).then(r => r.Items || []),
@@ -669,6 +688,7 @@ async function route() {
   const navName = name === 'browse' ? ({ Movie: 'movies', Series: 'tv' }[params.get('type')] || 'home') : name;
   $$('.nav a').forEach(a => a.classList.toggle('on', a.dataset.r === navName));
   hidePreview();
+  if ($('.modal-ov')) { $$('.modal-ov').forEach(e => e.remove()); listsChanged = false; if (!$('.player')) document.body.classList.remove('noscroll'); }
   const page = $('#page'); const my = ++routeToken;
   page.innerHTML = '';
   if (name !== 'search') scrollTo(0, 0);
@@ -737,7 +757,8 @@ async function renderSettings(page) {
     <section><h2>Genre rows</h2><p class="sub2">A random mix of genres is picked each time a page opens.</p>
       <div class="gcount">${counts.map(n => `<button class="chip" data-n="${n}" aria-pressed="${P.genreCount === n}">${n === 0 ? 'Off' : n + ' rows'}</button>`).join('')}</div>
       ${genres.length ? `<p class="sub2" style="margin-top:22px">Genres to include</p><div class="tgs genres-list">${genres.map(g => toggle('genre:' + g.Name, g.Name)).join('')}</div>` : ''}</section>
-    <section><button class="btn more reset">Reset to defaults</button><p class="sub2" style="margin-top:18px">Bighorn ${VERSION}</p></section>`;
+    <section><h2>Updates</h2><p class="sub2">You have Bighorn ${VERSION}.</p><button class="btn more chkupd">Check for updates</button></section>
+    <section><button class="btn more reset">Reset to defaults</button></section>`;
   const genreList = $('.genres-list', box);
   const syncGenres = () => genreList && genreList.classList.toggle('dim', prefs().genreCount === 0);
   syncGenres();
@@ -756,6 +777,7 @@ async function renderSettings(page) {
       setPref('genreCount', +c.dataset.n === 7 ? undefined : +c.dataset.n);
       syncGenres(); return;
     }
+    if (e.target.closest('.chkupd')) { checkForUpdate(true); return; }
     if (e.target.closest('.reset')) {
       store.set('prefs:' + (S.userId || 'anon'), {});
       toast('Settings reset', 1800);
@@ -997,9 +1019,11 @@ async function renderGrid(page, title, promise, emptyMsg) {
 /* ---------- details modal ---------- */
 function closeAllOverlays() { hidePreview(); $$('.modal-ov,.player').forEach(e => e.remove()); document.body.classList.remove('noscroll'); }
 let lastFocus = null;
+let listsChanged = false;
 function closeModal() {
   const had = $$('.modal-ov'); had.forEach(e => e.remove());
   if (!$('.player')) document.body.classList.remove('noscroll');
+  if (had.length && listsChanged) { listsChanged = false; route(); return; }
   if (had.length && lastFocus?.isConnected) lastFocus.focus({ preventScroll: true });
 }
 
@@ -1024,10 +1048,43 @@ async function openDetails(item, opts = {}) {
   info.innerHTML = `${lg ? `<img class="hlogo" src="${lg}" alt="${esc(it.Name)}">` : `<h1>${esc(it.Name)}</h1>`}
     <div class="hbtns" style="align-items:center"><button class="btn play">${ICON.play} <span>Play</span></button>
     ${it.Type === 'Series' ? `<button class="btn more mshuffle" title="Shuffle episodes">${ICON.shuffle} <span>Shuffle</span></button>` : ''}
-    <button class="circle mfav" title="${it.UserData?.IsFavorite ? 'Remove from My List' : 'Add to My List'}">${it.UserData?.IsFavorite ? ICON.check : ICON.plus}</button></div>`;
+    <button class="circle mfav" title="${it.UserData?.IsFavorite ? 'Remove from My List' : 'Add to My List'}">${it.UserData?.IsFavorite ? ICON.check : ICON.plus}</button>
+    <button class="circle mwatched" aria-pressed="${!!it.UserData?.Played}"></button></div>
+    <button class="textbtn mresume" hidden>Remove from Continue Watching</button>`;
   const li = $('.hlogo', info); if (li) li.onerror = () => li.replaceWith(h(`<h1>${esc(it.Name)}</h1>`));
   $('.mfav', info).onclick = e => toggleFav(it, e.currentTarget);
   const sh = $('.mshuffle', info); if (sh) sh.onclick = () => shufflePlay(it);
+  const wb = $('.mwatched', info), rb = $('.mresume', info);
+  const paintWatched = () => {
+    const on = !!it.UserData?.Played;
+    wb.setAttribute('aria-pressed', on); wb.innerHTML = on ? ICON.check : ICON.seen;
+    wb.title = on ? (it.Type === 'Series' ? 'Mark whole show unwatched' : 'Mark unwatched') : (it.Type === 'Series' ? 'Mark whole show watched' : 'Mark watched');
+  };
+  paintWatched();
+  wb.onclick = async () => {
+    const on = !it.UserData?.Played;
+    try {
+      await API.markPlayed(it.Id, on);
+      it.UserData = { ...(it.UserData || {}), Played: on, PlaybackPositionTicks: 0 };
+      paintWatched(); listsChanged = true; rb.hidden = true;
+      if (it.Type === 'Movie') $('span', playBtn).textContent = 'Play';
+      toast(on ? `Marked “${it.Name}” as watched` : `Marked “${it.Name}” as unwatched`, 2000);
+      if (it.Type === 'Series') $('select.season', ov)?.dispatchEvent(new Event('change'));
+    } catch (e) { toast("Couldn't update: " + e.message); }
+  };
+  let resumeTarget = it.Type === 'Movie' && it.UserData?.PlaybackPositionTicks > 0 ? it : null;
+  rb.hidden = !resumeTarget;
+  rb.onclick = async () => {
+    if (!resumeTarget) return;
+    try {
+      await API.resetProgress(resumeTarget.Id);
+      resumeTarget.UserData = { ...(resumeTarget.UserData || {}), PlaybackPositionTicks: 0, PlayedPercentage: 0 };
+      rb.hidden = true; listsChanged = true;
+      $('span', playBtn).textContent = it.Type === 'Series' ? `Play S${resumeTarget.ParentIndexNumber}:E${resumeTarget.IndexNumber}` : 'Play';
+      toast('Removed from Continue Watching', 2000);
+      playBtn.focus({ preventScroll: true });
+    } catch (e) { toast("Couldn't update: " + e.message); }
+  };
   const playBtn = $('.btn.play', info);
 
   let playTarget = it;
@@ -1035,6 +1092,7 @@ async function openDetails(item, opts = {}) {
   if (it.Type === 'Series') {
     nextEpisodeFor(it.Id).then(ep => {
       if (!ep) return; playTarget = ep;
+      if (ep.UserData?.PlaybackPositionTicks > 0) { resumeTarget = ep; rb.hidden = false; }
       $('span', playBtn).textContent = `${ep.UserData?.PlaybackPositionTicks > 0 ? 'Resume' : 'Play'} S${ep.ParentIndexNumber}:E${ep.IndexNumber}`;
     }).catch(() => {});
   }
@@ -1066,8 +1124,21 @@ async function openDetails(item, opts = {}) {
         const [src] = landscape(ep, 320, true); const pct = ep.UserData?.PlayedPercentage;
         const row = h(`<div tabindex="0" role="button" class="ep${ep.Id === opts.episodeId ? ' cur' : ''}"><div class="n">${ep.IndexNumber ?? ''}</div>
           <div class="thumb">${src ? `<img loading="lazy" src="${src}" alt="">` : ''}<div class="pi">${ICON.play}</div>${pct ? `<div class="prog2"><i style="width:${pct}%"></i></div>` : ep.UserData?.Played ? '<div class="prog2"><i style="width:100%"></i></div>' : ''}</div>
-          <div><div class="et"><span>${esc(ep.Name)}</span><span>${runtime(ep.RunTimeTicks)}</span></div><div class="eo">${esc(ep.Overview || '')}</div></div></div>`);
+          <div><div class="et"><span>${esc(ep.Name)}</span><span>${runtime(ep.RunTimeTicks)}</span></div><div class="eo">${esc(ep.Overview || '')}</div></div>
+          <button class="circle epw" aria-pressed="${!!ep.UserData?.Played}" title="${ep.UserData?.Played ? 'Mark unwatched' : 'Mark watched'}">${ep.UserData?.Played ? ICON.check : ICON.seen}</button></div>`);
         row.onclick = () => play(ep);
+        const ew = $('.epw', row);
+        ew.onclick = async e => {
+          e.stopPropagation();
+          const on = !ep.UserData?.Played;
+          try {
+            await API.markPlayed(ep.Id, on);
+            ep.UserData = { ...(ep.UserData || {}), Played: on, PlaybackPositionTicks: 0, PlayedPercentage: 0 };
+            ew.setAttribute('aria-pressed', on); ew.innerHTML = on ? ICON.check : ICON.seen; ew.title = on ? 'Mark unwatched' : 'Mark watched';
+            const th = $('.thumb', row); $('.prog2', th)?.remove(); if (on) th.append(h('<div class="prog2"><i style="width:100%"></i></div>'));
+            listsChanged = true;
+          } catch (err) { toast("Couldn't update: " + err.message); }
+        };
         box.append(row);
       }
     };
@@ -1138,7 +1209,7 @@ function openPlayer(p) {
   const tv = !(navigator.maxTouchPoints > 0 || matchMedia('(pointer:fine)').matches);
   const el = h(`<div class="player${tv ? ' tv' : ''}"><video autoplay playsinline${tv ? '' : ' controls'}></video>
     <div class="ptop"><button class="back" aria-label="Back">${ICON.back}</button><div class="ptitle">${esc(t)}${sub ? `<span>${esc(sub)}</span>` : ''}</div></div>
-    <button class="nextep">Next Episode ▶</button>${tv ? `<div class="pbar"><b class="pst">${ICON.pause}</b><div class="ptrack"><i></i></div><span class="ptime"></span></div>` : ''}</div>`);
+    <button class="skipbtn"></button><button class="nextep">Next Episode ▶</button>${tv ? `<div class="pbar"><b class="pst">${ICON.pause}</b><div class="ptrack"><i></i></div><span class="ptime"></span></div>` : ''}</div>`);
   document.body.append(el); document.body.classList.add('noscroll');
   if (!IN_APP) el.requestFullscreen?.().catch(() => {});
   window.BighornNative?.keepAwake?.(true);
@@ -1165,17 +1236,40 @@ function openPlayer(p) {
   v.onpause = () => { prog('Pause'); if (st) st.innerHTML = ICON.play; wake(); };
   v.onplay = () => { prog('Unpause'); if (st) st.innerHTML = ICON.pause; wake(); };
 
-  const nb = $('.nextep', el);
+  const nb = $('.nextep', el), sb = $('.skipbtn', el);
+  let segs = [], skipSeg = null;
+  API.segments(it.Id).then(list => { segs = list.filter(g => ['Intro', 'Recap', 'Outro'].includes(g.Type) && g.EndTicks > g.StartTicks); }).catch(() => {});
   if (it.Type === 'Episode' && it.SeriesId)
     if (p.queue) { next = p.queue[0] || null; nb.textContent = 'Next (Shuffle) ▶'; }
     else API.episodes(it.SeriesId, { startItemId: it.Id, limit: 2 }).then(l => { next = l.find(e => e.Id !== it.Id) || null; }).catch(() => {});
   const clock = t => { t = Math.max(0, Math.floor(t || 0)); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0'); };
   const bar = $('.ptrack i', el), tm = $('.ptime', el), st = $('.pst', el);
   v.ontimeupdate = () => {
-    nb.classList.toggle('show', !!next && v.duration > 0 && v.duration - v.currentTime < 45);
+    // Skip Intro / Recap / Credits from Jellyfin's media segments
+    const t = v.currentTime;
+    const seg = segs.find(g => t >= g.StartTicks / 1e7 && t < g.EndTicks / 1e7 - 1);
+    if (seg) {
+      const toEnd = v.duration > 0 && v.duration - seg.EndTicks / 1e7 < 15;
+      const label = seg.Type === 'Intro' ? 'Skip Intro' : seg.Type === 'Recap' ? 'Skip Recap' : (next && toEnd ? 'Next Episode ▶' : 'Skip Credits');
+      if (skipSeg !== seg) {
+        skipSeg = seg; sb.textContent = label; sb.classList.add('show');
+        if (tv) sb.focus({ preventScroll: true }); // so OK on the remote skips
+      }
+    } else if (skipSeg) {
+      skipSeg = null; sb.classList.remove('show');
+      if (document.activeElement === sb) sb.blur();
+    }
+    nb.classList.toggle('show', !!next && !(skipSeg && skipSeg.Type === 'Outro') && v.duration > 0 && v.duration - t < 45);
     if (bar && v.duration) { bar.style.width = (v.currentTime / v.duration * 100) + '%'; tm.textContent = `${clock(v.currentTime)} / ${clock(v.duration)}`; }
   };
   const goNext = n => play(n, p.queue ? { queue: p.queue.slice(1), fromStart: true } : {});
+  sb.onclick = () => {
+    const g = skipSeg; if (!g) return;
+    const end = g.EndTicks / 1e7;
+    sb.classList.remove('show'); sb.blur(); skipSeg = null;
+    if (g.Type === 'Outro' && (next || (v.duration > 0 && v.duration - end < 15))) { const n = next; close(); if (n) goNext(n); return; }
+    v.currentTime = Math.min(end, (v.duration || end + 1) - 0.5);
+  };
   nb.onclick = () => { const n = next; close(); goNext(n); };
   v.onended = () => { const n = next; close(); if (n) goNext(n); };
   v.onerror = () => toast('The video could not be loaded.');
@@ -1188,7 +1282,7 @@ function openPlayer(p) {
     if (k === 'Escape' && document.fullscreenElement) return;
     if (BACK_KEYS.includes(k)) { e.preventDefault(); close(); }
     else if (k === 'Enter' && document.activeElement === nb && nb.classList.contains('show')) return;
-    else if (k === 'Enter' && document.activeElement?.closest('.ptop')) return;
+    else if (k === 'Enter' && document.activeElement?.matches('.player button')) return; // OK on a focused button presses it
     else if (k === 'Enter' || k === ' ' || k === 'MediaPlayPause') { e.preventDefault(); v.paused ? v.play() : v.pause(); }
     else if (k === 'MediaPlay') v.play();
     else if (k === 'MediaPause') v.pause();
@@ -1259,6 +1353,7 @@ function moveFocus(dir) {
 // Back: player → menu → details → other page → home. Returns true if it handled it (the Android app asks this).
 window.bighornBack = () => {
   if ($('.player')) { $('.player .back').click(); return true; }
+  if ($('.upd')) { $('.upd').remove(); return true; }
   if ($('.subhdr.open')) { $('.subhdr').classList.remove('open'); $('.gbtn')?.focus(); return true; }
   if ($('.prof.open')) { $('.prof').classList.remove('open'); $('.avatar')?.focus(); return true; }
   if ($('.modal-ov')) { closeModal(); return true; }
@@ -1372,6 +1467,13 @@ function mock(path, { method, body, query: q }) {
   const seriesInfo = s => ({ ...s, ChildCount: D.seasons.filter(x => x.SeriesId === s.Id).length });
   if (path === '/System/Info/Public') return { ServerName: 'Demo Library', Version: '10.11.0' };
   if (path === '/Users/Public') return D.users;
+  if ((m = path.match(/^\/UserPlayedItems\/([^/]+)$/))) {
+    const on = method === 'POST', it = D.byId[m[1]];
+    const targets = it.Type === 'Series' ? D.eps.filter(e => e.SeriesId === it.Id) : [it];
+    for (const x of [it, ...targets]) Object.assign(x.UserData, { Played: on, PlaybackPositionTicks: 0, PlayedPercentage: 0 });
+    return it.UserData;
+  }
+  if ((m = path.match(/^\/UserItems\/([^/]+)\/UserData$/))) { Object.assign(D.byId[m[1]].UserData, { PlaybackPositionTicks: 0, PlayedPercentage: 0 }); return D.byId[m[1]].UserData; }
   if (path === '/QuickConnect/Enabled') return true;
   if (path === '/QuickConnect/Initiate') { D.qcPolls = 0; return { Secret: 'demo-secret', Code: '482913', Authenticated: false }; }
   if (path === '/QuickConnect/Connect') return { Secret: q.secret, Code: '482913', Authenticated: ++D.qcPolls >= 2 };
@@ -1532,9 +1634,54 @@ async function playIntro() {
   setTimeout(finish, 5000);
 }
 
+/* ---------- updates: check GitHub for a newer release ---------- */
+const verParts = v => String(v).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+function isNewer(a, b) { const x = verParts(a), y = verParts(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; }
+async function checkForUpdate(manual = false) {
+  try {
+    const r = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
+    if (!r.ok) throw new Error('GitHub said ' + r.status);
+    const rel = await r.json();
+    const latest = String(rel.tag_name || '').replace(/^v/i, '');
+    const apk = (rel.assets || []).find(a => /\.apk$/i.test(a.name));
+    if (!/^\d+\.\d+/.test(latest) || !isNewer(latest, VERSION)) { if (manual) toast(`You're up to date (Bighorn ${VERSION}).`, 2600); return null; }
+    const u = { version: latest, url: apk?.browser_download_url || `https://github.com/${UPDATE_REPO}/releases/latest` };
+    showUpdateBanner(u, manual);
+    return u;
+  } catch (e) { if (manual) toast("Couldn't check for updates: " + e.message); return null; }
+}
+function showUpdateBanner(u, focus) {
+  $('.upd')?.remove();
+  const canInstall = !!window.BighornNative?.installUpdate;
+  const b = h(`<div class="upd" role="dialog" aria-label="Update available">
+    <div class="upd-t"><b>Bighorn ${esc(u.version)} is available</b><span class="upd-s">You have ${VERSION}.</span></div>
+    <button class="btn play upd-go">${canInstall ? 'Update now' : 'Download'}</button><button class="btn more upd-later">Later</button></div>`);
+  document.body.append(b);
+  const status = $('.upd-s', b), go = $('.upd-go', b);
+  $('.upd-later', b).onclick = () => b.remove();
+  go.onclick = () => {
+    if (!canInstall) { status.innerHTML = `Download it from <b>${esc(u.url)}</b>`; return; }
+    go.disabled = true; status.textContent = 'Starting…';
+    window.BighornNative.installUpdate(u.url);
+  };
+  // the app reports progress back through this
+  window.bighornUpdateStatus = (state, msg) => {
+    const m = {
+      downloading: 'Downloading…', installing: 'Installing… confirm on the next screen.',
+      permission: 'Allow Bighorn to install apps on the screen that opens, then press Update now again.',
+      'permission-manual': 'Turn on Settings → Apps → Security & restrictions → Unknown sources → Bighorn, then press Update now again.',
+      done: 'Updated! Restarting…', cancelled: 'Update cancelled.', error: "The update didn't install: " + (msg || 'unknown error'),
+    }[state] || state;
+    status.textContent = m;
+    if (['permission', 'permission-manual', 'cancelled', 'error'].includes(state)) go.disabled = false;
+  };
+  if (focus) go.focus();
+}
+
 /* ---------- boot ---------- */
 if (IN_APP || S.token) playIntro();
 if (S.token) { renderShell(); route(); }
+if (IN_APP) setTimeout(() => checkForUpdate(false), 7000);
 else if (S.server) renderProfiles();
 else renderConnect();
 </script>

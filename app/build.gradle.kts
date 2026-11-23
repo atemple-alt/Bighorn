@@ -11,15 +11,28 @@ android {
         minSdk = 24
         // 34 keeps the classic (non edge-to-edge) window, so the keyboard never covers the sign-in fields.
         targetSdk = 34
-        versionCode = 10
-        versionName = "1.5.1"
+        versionCode = 11
+        versionName = "1.6.0"
+    }
+
+    // One fixed signing key for every build, so each new version installs over the old one
+    // (Android refuses an update signed with a different key). Fine for a personal, sideloaded app.
+    signingConfigs {
+        create("bighorn") {
+            storeFile = file("bighorn.keystore")
+            storePassword = "bighorn-tv"
+            keyAlias = "bighorn"
+            keyPassword = "bighorn-tv"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Signs release builds with the debug key so they install by sideloading without extra setup.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("bighorn")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("bighorn")
         }
     }
 

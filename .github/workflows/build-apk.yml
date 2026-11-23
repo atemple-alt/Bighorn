@@ -29,6 +29,9 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease
 
+      - name: Read app version
+        run: echo "APP_VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)" >> "$GITHUB_ENV"
+
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk Bighorn.apk
 
@@ -43,7 +46,8 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.run_number }}
-          name: Bighorn build ${{ github.run_number }}
+          # Tagged with the app version (e.g. v1.6.0); the app compares this tag with its own version.
+          tag_name: v${{ env.APP_VERSION }}
+          name: Bighorn ${{ env.APP_VERSION }}
           files: Bighorn.apk
           make_latest: true

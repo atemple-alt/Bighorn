@@ -1,13 +1,16 @@
 package app.bighorn;
 
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInstaller;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -24,8 +27,16 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 /**
  * Bighorn for Android / Android TV.
@@ -39,6 +50,7 @@ public class MainActivity extends Activity {
 
     private static final String HOST = "bighorn.app";
     private static final String START_URL = "http://" + HOST + "/index.html";
+    private static final String ACTION_INSTALL_STATUS = "app.bighorn.INSTALL_STATUS";
     private static final int BG = Color.rgb(4, 6, 13); // matches the launch intro
 
     private FrameLayout root;
@@ -71,7 +83,7 @@ public class MainActivity extends Activity {
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
         // The page checks for "BighornApp" to know it is running inside the app.
-        s.setUserAgentString(s.getUserAgentString() + " BighornApp/1.0.0");
+        s.setUserAgentString(s.getUserAgentString() + " BighornApp/1.6.0");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -150,6 +162,105 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void exitApp() {
             runOnUiThread(MainActivity.this::finish);
+        }
+
+        /** Downloads the APK at url and hands it to Android's installer. Progress goes back to the page. */
+        @JavascriptInterface
+        public void installUpdate(final String url) {
+            new Thread(() -> downloadAndInstall(url)).start();
+        }
+    }
+
+    private void updateStatus(String state, String message) {
+        final String js = "window.bighornUpdateStatus&&window.bighornUpdateStatus("
+                + JSONObject.quote(state) + "," + JSONObject.quote(message == null ? "" : message) + ")";
+        runOnUiThread(() -> web.evaluateJavascript(js, null));
+    }
+
+    private void downloadAndInstall(String url) {
+        try {
+            // Android 8+: the user has to allow Bighorn to install apps once.
+            if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
+                updateStatus("permission", "");
+                runOnUiThread(() -> {
+                    try {
+                        startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                Uri.parse("package:" + getPackageName())));
+                    } catch (ActivityNotFoundException e) {
+                        updateStatus("permission-manual", "");
+                    }
+                });
+                return;
+            }
+
+            updateStatus("downloading", "");
+            File apk = new File(getCacheDir(), "bighorn-update.apk");
+            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setInstanceFollowRedirects(true);
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(60000);
+            try {
+                int code = conn.getResponseCode();
+                if (code != 200) throw new IOException("download failed (HTTP " + code + ")");
+                try (InputStream in = conn.getInputStream(); OutputStream out = new FileOutputStream(apk)) {
+                    copy(in, out);
+                }
+            } finally {
+                conn.disconnect();
+            }
+
+            updateStatus("installing", "");
+            PackageInstaller installer = getPackageManager().getPackageInstaller();
+            PackageInstaller.SessionParams params =
+                    new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            params.setAppPackageName(getPackageName());
+            int sessionId = installer.createSession(params);
+            try (PackageInstaller.Session session = installer.openSession(sessionId)) {
+                try (OutputStream out = session.openWrite("bighorn.apk", 0, apk.length());
+                     InputStream in = new FileInputStream(apk)) {
+                    copy(in, out);
+                    session.fsync(out);
+                }
+                Intent status = new Intent(this, MainActivity.class).setAction(ACTION_INSTALL_STATUS);
+                int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+                if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE; // the installer adds the result extras
+                PendingIntent pending = PendingIntent.getActivity(this, 0, status, flags);
+                session.commit(pending.getIntentSender());
+            }
+        } catch (Exception e) {
+            updateStatus("error", e.getMessage());
+        }
+    }
+
+    private static void copy(InputStream in, OutputStream out) throws IOException {
+        byte[] buf = new byte[64 * 1024];
+        int n;
+        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+    }
+
+    /** Results from Android's installer arrive here. */
+    @Override
+    @SuppressWarnings("deprecation")
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (intent == null || !ACTION_INSTALL_STATUS.equals(intent.getAction())) return;
+        int status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
+        if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            Intent confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT);
+            if (confirm != null) {
+                confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                try {
+                    startActivity(confirm);
+                } catch (Exception e) {
+                    updateStatus("error", e.getMessage());
+                }
+            }
+        } else if (status == PackageInstaller.STATUS_SUCCESS) {
+            updateStatus("done", "");
+        } else if (status == PackageInstaller.STATUS_FAILURE_ABORTED) {
+            updateStatus("cancelled", "");
+        } else {
+            updateStatus("error", intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE));
         }
     }
 
