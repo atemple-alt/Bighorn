@@ -306,7 +306,7 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '1.4.1';
+const CLIENT = 'Bighorn', VERSION = '1.5.0';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
 
 /* ---------- small helpers ---------- */
@@ -327,6 +327,7 @@ function toast(msg, ms = 3800) { const t = h(`<div class="toast">${esc(msg)}</di
 const ICON = {
   play: '<svg viewBox="0 0 24 24"><path d="M6 4l15 8-15 8z"/></svg>',
   qc: '<svg viewBox="0 0 24 24"><path d="M7 2h10a2 2 0 012 2v16a2 2 0 01-2 2H7a2 2 0 01-2-2V4a2 2 0 012-2zm0 3v13h10V5zm4 14.5a1 1 0 102 0 1 1 0 00-2 0zM9 9h6v2H9zm0 3h4v2H9z"/></svg>',
+  shuffle: '<svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>',
   pause: '<svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg>',
   info: '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 2a8 8 0 110 16 8 8 0 010-16zm-1 6v8h2v-8zm0-4v2h2V6z"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z"/></svg>',
@@ -955,6 +956,7 @@ function showPreview(el, it) {
   pvEl = h(`<div class="preview" style="left:${left + scrollX}px;top:${r.top + scrollY - w * 9 / 16 * .18}px;width:${w}px">
     <div class="pimg">${src ? `<img src="${src}" alt="">` : ''}<div class="card" style="position:absolute;inset:0;background:none;pointer-events:none"><div class="ttl">${titled ? '' : esc(t)}${sub ? `<span class="sub">${esc(sub)}</span>` : ''}</div></div></div>
     <div class="pbody"><div class="pbtns"><button class="circle solid pplay" title="Play">${ICON.play}</button>
+      ${it.Type === 'Series' ? `<button class="circle pshuf" title="Shuffle episodes">${ICON.shuffle}</button>` : ''}
       ${favTarget ? `<button class="circle pfav" title="${fav ? 'Remove from My List' : 'Add to My List'}">${fav ? ICON.check : ICON.plus}</button>` : ''}
       <span class="sp"></span><button class="circle pmore" title="More info">${ICON.down}</button></div>
       ${metaLine(it)}
@@ -965,6 +967,7 @@ function showPreview(el, it) {
   p.onmouseleave = hidePreview;
   $('.pimg', p).onclick = $('.pmore', p).onclick = () => openDetails(it);
   $('.pplay', p).onclick = () => play(it);
+  const ps = $('.pshuf', p); if (ps) ps.onclick = () => shufflePlay(it);
   const fb = $('.pfav', p);
   if (fb) fb.onclick = () => toggleFav(it, fb);
 }
@@ -1020,9 +1023,11 @@ async function openDetails(item, opts = {}) {
   const info = $('.mh-info', ov);
   info.innerHTML = `${lg ? `<img class="hlogo" src="${lg}" alt="${esc(it.Name)}">` : `<h1>${esc(it.Name)}</h1>`}
     <div class="hbtns" style="align-items:center"><button class="btn play">${ICON.play} <span>Play</span></button>
+    ${it.Type === 'Series' ? `<button class="btn more mshuffle" title="Shuffle episodes">${ICON.shuffle} <span>Shuffle</span></button>` : ''}
     <button class="circle mfav" title="${it.UserData?.IsFavorite ? 'Remove from My List' : 'Add to My List'}">${it.UserData?.IsFavorite ? ICON.check : ICON.plus}</button></div>`;
   const li = $('.hlogo', info); if (li) li.onerror = () => li.replaceWith(h(`<h1>${esc(it.Name)}</h1>`));
   $('.mfav', info).onclick = e => toggleFav(it, e.currentTarget);
+  const sh = $('.mshuffle', info); if (sh) sh.onclick = () => shufflePlay(it);
   const playBtn = $('.btn.play', info);
 
   let playTarget = it;
@@ -1091,13 +1096,26 @@ async function nextEpisodeFor(seriesId) {
 }
 
 /* ---------- player ---------- */
-async function play(item) {
+// Shuffle: every episode of the show (specials left out) in random order; each one starts from the beginning,
+// and when it ends the next random episode plays.
+async function shufflePlay(series) {
+  hidePreview();
+  try {
+    const all = (await API.episodes(series.Id, { limit: 5000 })).filter(e => (e.ParentIndexNumber ?? 1) > 0 && e.LocationType !== 'Virtual');
+    if (!all.length) return toast('No episodes to shuffle.');
+    const [first, ...rest] = shuffle(all);
+    toast(`Shuffling ${series.Name || first.SeriesName}: S${first.ParentIndexNumber}:E${first.IndexNumber} “${first.Name}”`, 2600);
+    play(first, { queue: rest, fromStart: true });
+  } catch (e) { toast("Couldn't shuffle: " + e.message); }
+}
+
+async function play(item, opts = {}) {
   hidePreview();
   try {
     if (item.Type === 'Series') { const ep = await nextEpisodeFor(item.Id); if (!ep) return toast('No playable episodes found.'); item = ep; }
-    if (S.demo) return toast('Demo mode shows the interface only. Connect to your Jellyfin server to play.');
+    if (S.demo) { if (!opts.queue) toast('Demo mode shows the interface only. Connect to your Jellyfin server to play.'); return; }
     const it = await API.item(item.Id);
-    const start = it.UserData?.PlaybackPositionTicks || 0;
+    const start = opts.fromStart ? 0 : (it.UserData?.PlaybackPositionTicks || 0);
     const pb = await API.playbackInfo(it.Id, start);
     if (pb.ErrorCode) throw new Error(pb.ErrorCode);
     const ms = pb.MediaSources?.[0]; if (!ms) throw new Error('No media source');
@@ -1110,7 +1128,7 @@ async function play(item) {
       url = S.server + ms.TranscodingUrl;
       if (!/api_key=/i.test(url)) url += `&api_key=${S.token}`;
     } else throw new Error("This file can't be played in this browser.");
-    openPlayer({ it, url, method, ms, psid: pb.PlaySessionId, start });
+    openPlayer({ it, url, method, ms, psid: pb.PlaySessionId, start, queue: opts.queue });
   } catch (e) { toast('Playback failed: ' + e.message); }
 }
 
@@ -1147,17 +1165,19 @@ function openPlayer(p) {
   v.onpause = () => { prog('Pause'); if (st) st.innerHTML = ICON.play; wake(); };
   v.onplay = () => { prog('Unpause'); if (st) st.innerHTML = ICON.pause; wake(); };
 
-  if (it.Type === 'Episode' && it.SeriesId)
-    API.episodes(it.SeriesId, { startItemId: it.Id, limit: 2 }).then(l => { next = l.find(e => e.Id !== it.Id) || null; }).catch(() => {});
   const nb = $('.nextep', el);
+  if (it.Type === 'Episode' && it.SeriesId)
+    if (p.queue) { next = p.queue[0] || null; nb.textContent = 'Next (Shuffle) ▶'; }
+    else API.episodes(it.SeriesId, { startItemId: it.Id, limit: 2 }).then(l => { next = l.find(e => e.Id !== it.Id) || null; }).catch(() => {});
   const clock = t => { t = Math.max(0, Math.floor(t || 0)); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0'); };
   const bar = $('.ptrack i', el), tm = $('.ptime', el), st = $('.pst', el);
   v.ontimeupdate = () => {
     nb.classList.toggle('show', !!next && v.duration > 0 && v.duration - v.currentTime < 45);
     if (bar && v.duration) { bar.style.width = (v.currentTime / v.duration * 100) + '%'; tm.textContent = `${clock(v.currentTime)} / ${clock(v.duration)}`; }
   };
-  nb.onclick = () => { close(); play(next); };
-  v.onended = () => { const n = next; close(); if (n) play(n); };
+  const goNext = n => play(n, p.queue ? { queue: p.queue.slice(1), fromStart: true } : {});
+  nb.onclick = () => { const n = next; close(); goNext(n); };
+  v.onended = () => { const n = next; close(); if (n) goNext(n); };
   v.onerror = () => toast('The video could not be loaded.');
 
   let idle;
