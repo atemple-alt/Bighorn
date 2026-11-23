@@ -1,0 +1,47 @@
+name: Build Bighorn APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # lets the job publish the APK as a release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk Bighorn.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Bighorn-apk
+          path: Bighorn.apk
+
+      # Publishes each build as a release, so the newest APK is always at:
+      # https://github.com/<you>/<repo>/releases/latest/download/Bighorn.apk
+      # (a link the Downloader app on a TV can open, if the repository is public)
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Bighorn build ${{ github.run_number }}
+          files: Bighorn.apk
+          make_latest: true
