@@ -181,6 +181,11 @@ select.season{background:#242424;color:#fff;border:1px solid #4d4d4d;border-radi
 @keyframes i-rise{from{opacity:0;transform:translate3d(0,10%,0)}to{opacity:1;transform:none}}
 @keyframes i-b{from{opacity:0;transform:translate3d(0,18%,0) scale(.6)}to{opacity:1;transform:none}}
 @keyframes i-glow{0%{opacity:0}40%{opacity:1}100%{opacity:.85}}
+/* collections */
+.simc{position:relative}
+.simw{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.65);display:grid;place-items:center;font-size:15px;color:#46d369}
+.sec-h .sub2{margin:0}
+.partof .sec-h{gap:16px}
 /* banner slideshow */
 .hdots{position:absolute;z-index:3;right:4vw;bottom:22%;display:flex;gap:6px}
 .hdots button{width:8px;height:8px;border-radius:4px;border:0;padding:0;background:rgba(255,255,255,.4);transition:width .3s,background .3s}
@@ -213,6 +218,7 @@ body.tvmode .hdr.solid{background:linear-gradient(180deg,rgba(0,0,0,.8) 10%,tran
 /* watched controls */
 .circle[aria-pressed="true"]{background:rgba(0,164,220,.35);border-color:var(--a2)}
 .textbtn{display:block;margin-top:14px;background:none;border:0;padding:4px 0;color:#d6d6d6;font-size:14px;text-decoration:underline;text-underline-offset:4px}
+.textbtn[hidden]{display:none}
 .textbtn:hover,.kbd .textbtn:focus{color:#fff;outline:0;text-decoration-color:var(--a2)}
 .epw{width:34px;height:34px;font-size:16px}
 /* Quick Connect */
@@ -343,7 +349,7 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '1.9.1';
+const CLIENT = 'Bighorn', VERSION = '2.0.0';
 const UPDATE_REPO = 'atemple-alt/Bighorn';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
 // A TV (remote control only). Inside the Android app, Android says so directly; elsewhere, guess from
@@ -439,6 +445,9 @@ const API = {
   episodes: (id, q = {}) => call(`/Shows/${id}/Episodes`, { query: { userId: S.userId, fields: 'Overview', ...q } }).then(r => r.Items || []),
   markPlayed: (id, on) => call(`/UserPlayedItems/${id}`, { method: on ? 'POST' : 'DELETE', query: { userId: S.userId } }),
   resetProgress: id => call(`/UserItems/${id}/UserData`, { method: 'POST', query: { userId: S.userId }, body: { PlaybackPositionTicks: 0 } }),
+  collections: (limit = 60) => API.items({ includeItemTypes: 'BoxSet', sortBy: 'SortName', limit }),
+  // films in a collection, oldest first
+  collectionItems: id => API.items({ parentId: id, sortBy: 'PremiereDate,ProductionYear,SortName', sortOrder: 'Ascending', limit: 200 }),
   segments: id => call(`/MediaSegments/${id}`).then(r => r.Items || []),
   similar: id => call(`/Items/${id}/Similar`, { query: { userId: S.userId, limit: 12, fields: FIELDS } }).then(r => r.Items || []),
   favorite: (id, on) => call(`/UserFavoriteItems/${id}`, { method: on ? 'POST' : 'DELETE', query: { userId: S.userId } }),
@@ -761,7 +770,7 @@ async function route() {
   if (!$('#page')) renderShell();
   const [name, qs] = (location.hash.replace(/^#\/?/, '') || 'home').split('?');
   const params = new URLSearchParams(qs || '');
-  const navName = name === 'browse' ? ({ Movie: 'movies', Series: 'tv' }[params.get('type')] || 'home') : name;
+  const navName = name === 'collections' ? 'movies' : name === 'browse' ? ({ Movie: 'movies', Series: 'tv' }[params.get('type')] || 'home') : name;
   $$('.nav a').forEach(a => a.classList.toggle('on', a.dataset.r === navName));
   hidePreview();
   if ($('.modal-ov')) { $$('.modal-ov').forEach(e => e.remove()); listsChanged = false; if (!$('.player')) document.body.classList.remove('noscroll'); }
@@ -771,11 +780,12 @@ async function route() {
   try {
     if (name === 'tv') await renderBrowse(page, 'Series', my);
     else if (name === 'movies') await renderBrowse(page, 'Movie', my);
+    else if (name === 'collections') await renderGrid(page, 'Collections', API.collections(500), 'No collections yet. In Jellyfin you can turn on automatic collections for a movie library, or make your own.');
     else if (name === 'list') await renderGrid(page, 'My List', API.items({ filters: 'IsFavorite', includeItemTypes: 'Movie,Series', sortBy: 'SortName', limit: 200 }), "Add shows and movies with the + button and they'll show up here.");
     else if (name === 'search') {
       const q = params.get('q') || ''; const inp = $('.search input');
       if (inp && !inp.value) { inp.value = q; $('.search').classList.add('open'); }
-      await renderGrid(page, `Results for “${q}”`, API.items({ searchTerm: q, includeItemTypes: 'Movie,Series', limit: 60 }), 'No matches. Try a different title.');
+      await renderGrid(page, `Results for “${q}”`, API.items({ searchTerm: q, includeItemTypes: 'Movie,Series,BoxSet', limit: 60 }), 'No matches. Try a different title.');
     }
     else if (name === 'settings') await renderSettings(page);
     else if (name === 'browse') await renderGenreBrowse(page, params, my);
@@ -796,6 +806,7 @@ const ROW_SETTINGS = [
   { id: 'nextup', label: 'Next Up', hint: 'Next episode of shows you are watching' },
   { id: 'top10', label: 'Top 10 by Rating' },
   { id: 'mylist', label: 'My List', hint: 'Shown on Home' },
+  { id: 'collections', label: 'Collections', hint: 'Box sets like trilogies and franchises (Home and Movies)' },
 ];
 const PLAYBACK_SETTINGS = [{ id: 'nativePlayer', label: "Use Android's video player", hint: 'Plays far more formats directly (HEVC, HDR, surround). Turn off to use the built-in web player.' }];
 const LOOK_SETTINGS = [
@@ -967,6 +978,7 @@ async function renderBrowse(page, type, my) {
   if (type !== 'Movie' && P.on('nextup')) addRow(rows, 'Next Up', API.nextUp());
   for (const v of views.filter(v => P.on('latest:' + v.Id))) addRow(rows, views.length > 1 || !type ? `New in ${v.Name}` : 'Recently Added', API.latest(v.Id), { href: `#/browse?type=${v.CollectionType === 'movies' ? 'Movie' : 'Series'}&sort=1` });
   if (P.on('top10')) addRow(rows, `Top 10 ${type === 'Series' ? 'Shows' : 'Movies'} by Rating`, API.items({ includeItemTypes: type || 'Movie', sortBy: 'CommunityRating', sortOrder: 'Descending', limit: 10 }), { top10: true });
+  if (type !== 'Series' && P.on('collections')) addRow(rows, 'Collections', API.collections(30), { href: '#/collections' });
   if (!type && P.on('mylist')) addRow(rows, 'My List', API.items({ filters: 'IsFavorite', includeItemTypes: 'Movie,Series', sortBy: 'DateCreated', sortOrder: 'Descending', limit: 30 }));
   if (!P.genreCount) return;
   const genreHost = h('<div></div>'); rows.append(genreHost);
@@ -1114,7 +1126,8 @@ function metaLine(it, full) {
   if (it.CommunityRating) bits.push(`<span class="score">★ ${(+it.CommunityRating).toFixed(1)}</span>`);
   if (it.ProductionYear) bits.push(`<span>${it.ProductionYear}</span>`);
   if (it.OfficialRating) bits.push(`<span class="badge">${esc(it.OfficialRating)}</span>`);
-  if (it.Type === 'Series' && it.ChildCount) bits.push(`<span>${it.ChildCount} Season${it.ChildCount > 1 ? 's' : ''}</span>`);
+  if (it.Type === 'BoxSet' && it.ChildCount) bits.push(`<span>${it.ChildCount} title${it.ChildCount > 1 ? 's' : ''}</span>`);
+  else if (it.Type === 'Series' && it.ChildCount) bits.push(`<span>${it.ChildCount} Season${it.ChildCount > 1 ? 's' : ''}</span>`);
   else if (it.RunTimeTicks) bits.push(`<span>${runtime(it.RunTimeTicks)}</span>`);
   if (full) { const ms = it.MediaSources?.[0]?.MediaStreams?.find(s => s.Type === 'Video'); if (ms?.Width >= 3800) bits.push('<span class="badge">4K</span>'); else if (ms?.Width >= 1260) bits.push('<span class="badge">HD</span>'); }
   return `<div class="meta">${bits.join('')}</div>`;
@@ -1253,6 +1266,29 @@ async function openDetails(item, opts = {}) {
 
   let playTarget = it;
   if (it.Type === 'Movie' && it.UserData?.PlaybackPositionTicks > 0) $('span', playBtn).textContent = 'Resume';
+  if (it.Type === 'BoxSet') {
+    API.collectionItems(it.Id).then(kids => {
+      if (!ov.isConnected) return;
+      const t = collectionPlayTarget(kids);
+      if (t) { playTarget = t; $('span', playBtn).textContent = `${t.UserData?.PlaybackPositionTicks > 0 && !t.UserData?.Played ? 'Resume' : 'Play'} ${t.Name}`; }
+      const sec = h(`<div><div class="sec-h"><h3>In this collection</h3><span class="sub2">${kids.length} title${kids.length === 1 ? '' : 's'}</span></div><div class="sim"></div></div>`);
+      kids.forEach(k => $('.sim', sec).append(simCard(k)));
+      body.insertBefore(sec, body.children[1] || null);
+    }).catch(() => {});
+  }
+  if (it.Type === 'Movie') {
+    collectionsFor(it.Id).then(list => {
+      if (!ov.isConnected || !list.length) return;
+      for (const { set, items } of list) {
+        const others = items.filter(k => k.Id !== it.Id);
+        if (!others.length) continue;
+        const sec = h(`<div class="partof"><div class="sec-h"><h3>Part of ${esc(set.Name)}</h3><button class="textbtn opencoll">See the collection</button></div><div class="sim"></div></div>`);
+        others.forEach(k => $('.sim', sec).append(simCard(k)));
+        $('.opencoll', sec).onclick = () => openDetails(set);
+        body.insertBefore(sec, $('.morelike', body) || null);
+      }
+    }).catch(() => {});
+  }
   if (it.Type === 'Series') {
     nextEpisodeFor(it.Id).then(ep => {
       if (!ep) return; playTarget = ep;
@@ -1310,17 +1346,40 @@ async function openDetails(item, opts = {}) {
     sel.onchange = () => loadEps(sel.value);
   }
 
-  API.similar(it.Id).then(list => {
+  if (it.Type !== 'BoxSet') API.similar(it.Id).then(list => {
     if (!list.length || !ov.isConnected) return;
-    const sec = h(`<div><div class="sec-h"><h3>More Like This</h3></div><div class="sim"></div></div>`);
-    for (const s of list) {
-      const [src] = landscape(s, 400);
-      const c = h(`<div tabindex="0" role="button" class="simc">${src ? `<img loading="lazy" src="${src}" alt="">` : '<img alt="">'}<div class="sb"><b>${esc(s.Name)}</b>${metaLine(s)}<p>${esc(s.Overview || '')}</p></div></div>`);
-      c.onclick = () => openDetails(s);
-      $('.sim', sec).append(c);
-    }
+    const sec = h(`<div class="morelike"><div class="sec-h"><h3>More Like This</h3></div><div class="sim"></div></div>`);
+    for (const s of list) $('.sim', sec).append(simCard(s));
     body.append(sec);
   }).catch(() => {});
+}
+
+let collectionIndex = null;
+function collectionsFor(itemId) {
+  if (!collectionIndex) collectionIndex = (async () => {
+    const map = new Map();
+    const sets = await API.collections(500).catch(() => []);
+    for (let i = 0; i < sets.length; i += 4) {           // a few at a time, to go easy on the server
+      await Promise.all(sets.slice(i, i + 4).map(async b => {
+        const kids = await API.collectionItems(b.Id).catch(() => []);
+        for (const k of kids) { if (!map.has(k.Id)) map.set(k.Id, []); map.get(k.Id).push({ set: b, items: kids }); }
+      }));
+    }
+    return map;
+  })();
+  return collectionIndex.then(m => m.get(itemId) || []);
+}
+// What "Play" means for a collection: carry on with a part-watched film, else the first unwatched, else the first.
+function collectionPlayTarget(kids) {
+  return kids.find(k => k.UserData?.PlaybackPositionTicks > 0 && !k.UserData?.Played) || kids.find(k => !k.UserData?.Played) || kids[0] || null;
+}
+
+function simCard(s) {
+  const [src] = landscape(s, 400);
+  const watched = s.UserData?.Played ? '<span class="simw" title="Watched">' + ICON.check + '</span>' : '';
+  const c = h(`<div tabindex="0" role="button" class="simc">${src ? `<img loading="lazy" src="${src}" alt="">` : '<img alt="">'}${watched}<div class="sb"><b>${esc(s.Name)}</b>${metaLine(s)}<p>${esc(s.Overview || '')}</p></div></div>`);
+  c.onclick = () => openDetails(s);
+  return c;
 }
 
 async function nextEpisodeFor(seriesId) {
@@ -1368,6 +1427,7 @@ async function play(item, opts = {}) {
   hidePreview();
   try {
     if (item.Type === 'Series') { const ep = await nextEpisodeFor(item.Id); if (!ep) return toast('No playable episodes found.'); item = ep; }
+    if (item.Type === 'BoxSet') { const t = collectionPlayTarget(await API.collectionItems(item.Id)); if (!t) return toast('This collection is empty.'); item = t; }
     if (S.demo) { if (!opts.queue) toast('Demo mode shows the interface only. Connect to your Jellyfin server to play.'); return; }
     const it = await API.item(item.Id);
     const start = opts.startTicks != null ? opts.startTicks : opts.fromStart ? 0 : (it.UserData?.PlaybackPositionTicks || 0);
@@ -1518,10 +1578,12 @@ function focusEl(el) {
     // keep the row in a fixed spot under the banner; scroll the row itself sideways
     const top = row.getBoundingClientRect().top + scrollY - innerHeight * 0.56;
     scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-    const tr = el.closest('.track'), r = el.getBoundingClientRect(), tb = tr.getBoundingClientRect();
-    const pad = innerWidth * 0.04;
-    if (r.left < tb.left + pad) tr.scrollBy({ left: r.left - tb.left - pad, behavior: 'smooth' });
-    else if (r.right > tb.right - pad) tr.scrollBy({ left: r.right - tb.right + pad, behavior: 'smooth' });
+    const tr = el.closest('.track');
+    if (tr) {
+      const r = el.getBoundingClientRect(), tb = tr.getBoundingClientRect(), pad = innerWidth * 0.04;
+      if (r.left < tb.left + pad) tr.scrollBy({ left: r.left - tb.left - pad, behavior: 'smooth' });
+      else if (r.right > tb.right - pad) tr.scrollBy({ left: r.right - tb.right + pad, behavior: 'smooth' });
+    }
   }
   else el.scrollIntoView({ block: row ? 'center' : 'nearest', inline: 'nearest', behavior: 'smooth' });
 }
@@ -1636,6 +1698,15 @@ const DEMO = (() => {
     }
     if (i === 1) { const e = eps.find(x => x.SeriesId === s.Id && !x.UserData.Played); e.UserData.PlaybackPositionTicks = e.RunTimeTicks * .4; e.UserData.PlayedPercentage = 40; e.UserData.LastPlayedDate = new Date().toISOString(); }
   });
+  const boxsets = [
+    { name: 'The Meridian Saga', ids: ['m0', 'm8', 'm11'] },
+    { name: 'High Plains Trilogy', ids: ['m17', 'm20', 'm4'] },
+    { name: 'Northstar Originals', ids: ['m5', 'm9', 'm13', 'm18'] },
+  ].map((b, i) => ({ Id: 'b' + i, Name: b.name, Type: 'BoxSet', ChildCount: b.ids.length, Overview: 'Every film in the ' + b.name + ', in order.',
+    ImageTags: { Primary: 'd', Thumb: 'd', Logo: 'd' }, BackdropImageTags: ['d'], Genres: [], GenreItems: [], People: [], ProductionYear: null,
+    DateCreated: new Date().toISOString(), UserData: { IsFavorite: false, Played: false, PlaybackPositionTicks: 0 }, _kids: b.ids }));
+  boxsets.forEach(b => b._kids.forEach((id, k) => { const m = items.find(x => x.Id === id); if (m) m.ProductionYear = 1990 + Number(b.Id.slice(1)) * 7 + k * 3; }));
+  items.push(...boxsets);
   const byId = Object.fromEntries([...items, ...eps, ...seasons].map(x => [x.Id, x]));
   return { G, gid, items, eps, seasons, byId,
     users: [{ Name: 'Alex', Id: 'u1' }, { Name: 'Jordan', Id: 'u2' }, { Name: 'Kids', Id: 'u3' }],
@@ -1701,7 +1772,11 @@ function mock(path, { method, body, query: q }) {
   }
   if (path === '/Items/Latest') return lim(sortItems.call(null, D.items.filter(i => i.ParentId === q.parentId)).sort((a, b) => b.DateCreated.localeCompare(a.DateCreated))).map(seriesInfo);
   if (path === '/Items') {
-    let r = D.items.filter(i => !types || types.includes(i.Type));
+    if (q.parentId && D.byId[q.parentId]?.Type === 'BoxSet') {
+      const kids = D.byId[q.parentId]._kids.map(id => D.byId[id]).sort((a, b) => a.ProductionYear - b.ProductionYear);
+      return { Items: kids, TotalRecordCount: kids.length };
+    }
+    let r = D.items.filter(i => (!types ? i.Type !== 'BoxSet' : types.includes(i.Type)));
     if (q.genreIds) r = r.filter(i => i.GenreItems.some(g => g.Id === q.genreIds));
     if (q.filters === 'IsFavorite') r = r.filter(i => i.UserData.IsFavorite);
     if (q.searchTerm) { const s = q.searchTerm.toLowerCase(); r = r.filter(i => i.Name.toLowerCase().includes(s) || i.Genres.some(g => g.toLowerCase().includes(s)) || i.People.some(p => p.Name.toLowerCase().includes(s))); }
