@@ -343,7 +343,7 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '1.9.0';
+const CLIENT = 'Bighorn', VERSION = '1.9.1';
 const UPDATE_REPO = 'atemple-alt/Bighorn';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
 // A TV (remote control only). Inside the Android app, Android says so directly; elsewhere, guess from
@@ -827,7 +827,11 @@ async function renderSettings(page) {
   const counts = [0, 3, 5, 7, 10];
   const box = $('.settings', page);
   box.innerHTML = `<h1>Settings</h1>
-    <section><h2>Look</h2><div class="tgs">${LOOK_SETTINGS.map(r => toggle(r.id, r.label, r.hint)).join('')}</div></section>
+    <section><h2>Look</h2>
+      <p class="sub2">Featured banner</p>
+      <div class="gcount hstyle">${[['slideshow', 'Slideshow'], ['single', 'Single title']].map(([v, l]) => `<button class="chip" data-hs="${v}" aria-pressed="${(P.raw.heroStyle || 'slideshow') === v}">${l}</button>`).join('')}</div>
+      <p class="sub2" style="margin:10px 0 18px">Slideshow rotates through several titles you can flip with left/right. Single title shows one featured title.</p>
+      <div class="tgs">${LOOK_SETTINGS.map(r => toggle(r.id, r.label, r.hint)).join('')}</div></section>
     ${nativePlayerAvailable() ? `<section><h2>Playback</h2><div class="tgs">${PLAYBACK_SETTINGS.map(r => toggle(r.id, r.label, r.hint)).join('')}</div></section>` : ''}
     <section><h2>Rows</h2><p class="sub2">Choose which rows appear on Home, TV Shows and Movies.</p>
       <div class="tgs">${ROW_SETTINGS.map(r => toggle(r.id, r.label, r.hint)).join('')}
@@ -849,9 +853,15 @@ async function renderSettings(page) {
       if (t.dataset.k === 'scene') applyScene();
       return;
     }
-    const c = e.target.closest('.chip');
+    const hs = e.target.closest('.chip[data-hs]');
+    if (hs) {
+      $$('.chip[data-hs]', box).forEach(x => x.setAttribute('aria-pressed', x === hs));
+      setPref('heroStyle', hs.dataset.hs === 'slideshow' ? undefined : hs.dataset.hs);
+      return;
+    }
+    const c = e.target.closest('.chip[data-n]');
     if (c) {
-      $$('.chip', box).forEach(x => x.setAttribute('aria-pressed', x === c));
+      $$('.chip[data-n]', box).forEach(x => x.setAttribute('aria-pressed', x === c));
       setPref('genreCount', +c.dataset.n === 7 ? undefined : +c.dataset.n);
       syncGenres(); return;
     }
@@ -947,7 +957,7 @@ async function renderBrowse(page, type, my) {
   const P = prefs();
   if (!P.on('hero')) { hero.remove(); rows.classList.add('nohero'); }
   else API.items({ includeItemTypes: types, sortBy: 'Random', imageTypes: 'Backdrop', limit: 8 })
-    .then(list => { const picks = list.filter(i => i.BackdropImageTags?.length); picks.length ? startCarousel(hero, picks) : (hero.remove(), rows.classList.add('nohero')); })
+    .then(list => { const picks = list.filter(i => i.BackdropImageTags?.length); if (!picks.length) { hero.remove(); rows.classList.add('nohero'); } else if (prefs().raw.heroStyle === 'single') fillHero(hero, picks[0]); else startCarousel(hero, picks); })
     .catch(() => { hero.remove(); rows.classList.add('nohero'); });
 
   const views = (await cached('views', API.views)).filter(v => type === 'Movie' ? v.CollectionType === 'movies' : type === 'Series' ? v.CollectionType === 'tvshows' : ['movies', 'tvshows'].includes(v.CollectionType));
