@@ -2,9 +2,12 @@ package app.bighorn;
 
 import android.app.Activity;
 import android.app.PendingIntent;
+import android.app.UiModeManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.content.pm.PackageInstaller;
 import android.graphics.Color;
 import android.media.MediaCodecInfo;
@@ -94,7 +97,7 @@ public class MainActivity extends Activity {
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
         // The page checks for "BighornApp" to know it is running inside the app.
-        s.setUserAgentString(s.getUserAgentString() + " BighornApp/1.8.0");
+        s.setUserAgentString(s.getUserAgentString() + " BighornApp/1.8.1");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -173,6 +176,18 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void exitApp() {
             runOnUiThread(MainActivity.this::finish);
+        }
+
+        /** True on Android TV / Google TV boxes, so the page uses its remote-control (TV) layout. */
+        @JavascriptInterface
+        public boolean isTv() {
+            try {
+                UiModeManager m = (UiModeManager) getSystemService(UI_MODE_SERVICE);
+                if (m != null && m.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION) return true;
+                return getPackageManager().hasSystemFeature(PackageManager.FEATURE_LEANBACK);
+            } catch (Exception e) {
+                return false;
+            }
         }
 
         /** Opens the native player with a JSON config from the page. */

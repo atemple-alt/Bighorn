@@ -11,8 +11,8 @@ android {
         minSdk = 24
         // 34 keeps the classic (non edge-to-edge) window, so the keyboard never covers the sign-in fields.
         targetSdk = 34
-        versionCode = 15
-        versionName = "1.8.0"
+        versionCode = 16
+        versionName = "1.8.1"
     }
 
     // One fixed signing key for every build, so each new version installs over the old one

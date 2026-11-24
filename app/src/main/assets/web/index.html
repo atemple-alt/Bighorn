@@ -334,11 +334,15 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '1.8.0';
+const CLIENT = 'Bighorn', VERSION = '1.8.1';
 const UPDATE_REPO = 'atemple-alt/Bighorn';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
-// A TV: no touchscreen and no mouse — just a remote.
-const TV_MODE = !(navigator.maxTouchPoints > 0 || matchMedia('(pointer:fine)').matches);
+// A TV (remote control only). Inside the Android app, Android says so directly; elsewhere, guess from
+// the lack of a touchscreen and mouse.
+const TV_MODE = (() => {
+  try { if (window.BighornNative?.isTv) return !!window.BighornNative.isTv(); } catch {}
+  return !(navigator.maxTouchPoints > 0 || matchMedia('(pointer:fine)').matches);
+})();
 
 /* ---------- small helpers ---------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -822,7 +826,7 @@ async function renderSettings(page) {
     <section><h2>Genre rows</h2><p class="sub2">A random mix of genres is picked each time a page opens.</p>
       <div class="gcount">${counts.map(n => `<button class="chip" data-n="${n}" aria-pressed="${P.genreCount === n}">${n === 0 ? 'Off' : n + ' rows'}</button>`).join('')}</div>
       ${genres.length ? `<p class="sub2" style="margin-top:22px">Genres to include</p><div class="tgs genres-list">${genres.map(g => toggle('genre:' + g.Name, g.Name)).join('')}</div>` : ''}</section>
-    <section><h2>Updates</h2><p class="sub2">You have Bighorn ${VERSION}.</p><button class="btn more chkupd">Check for updates</button></section>
+    <section><h2>Updates</h2><p class="sub2">You have Bighorn ${VERSION}${TV_MODE ? ' · TV layout' : ''}.</p><button class="btn more chkupd">Check for updates</button></section>
     <section><button class="btn more reset">Reset to defaults</button></section>`;
   const genreList = $('.genres-list', box);
   const syncGenres = () => genreList && genreList.classList.toggle('dim', prefs().genreCount === 0);
@@ -1335,7 +1339,7 @@ async function play(item, opts = {}) {
 function openPlayer(p) {
   const { it } = p;
   const [t, sub] = cardTitle(it);
-  const tv = !(navigator.maxTouchPoints > 0 || matchMedia('(pointer:fine)').matches);
+  const tv = TV_MODE;
   const el = h(`<div class="player${tv ? ' tv' : ''}"><video autoplay playsinline${tv ? '' : ' controls'}></video>
     <div class="ptop"><button class="back" aria-label="Back">${ICON.back}</button><div class="ptitle">${esc(t)}${sub ? `<span>${esc(sub)}</span>` : ''}</div></div>
     <button class="skipbtn"></button><button class="nextep">Next Episode ▶</button>${tv ? `<div class="pbar"><b class="pst">${ICON.pause}</b><div class="ptrack"><i></i></div><span class="ptime"></span></div>` : ''}</div>`);
