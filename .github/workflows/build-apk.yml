@@ -24,6 +24,17 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # The signing key lives in a private repository secret, not in the code.
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.BIGHORN_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::The BIGHORN_KEYSTORE_B64 secret is missing. Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > app/bighorn.keystore
+
       - name: Build APK
         run: |
           chmod +x gradlew

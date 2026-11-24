@@ -16,7 +16,8 @@ android {
     }
 
     // One fixed signing key for every build, so each new version installs over the old one
-    // (Android refuses an update signed with a different key). Fine for a personal, sideloaded app.
+    // (Android refuses an update signed with a different key). The key file is written at build
+    // time from the private BIGHORN_KEYSTORE_B64 repository secret; it is not stored in the code.
     signingConfigs {
         create("bighorn") {
             storeFile = file("bighorn.keystore")

@@ -6,3 +6,6 @@ local.properties
 *.iml
 captures/
 .DS_Store
+
+# signing key comes from the BIGHORN_KEYSTORE_B64 secret at build time
+app/bighorn.keystore
