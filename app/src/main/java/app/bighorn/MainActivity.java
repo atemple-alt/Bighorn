@@ -97,7 +97,7 @@ public class MainActivity extends Activity {
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
         // The page checks for "BighornApp" to know it is running inside the app.
-        s.setUserAgentString(s.getUserAgentString() + " BighornApp/1.8.1");
+        s.setUserAgentString(s.getUserAgentString() + " BighornApp/1.9.0");
 
         web.setWebViewClient(new WebViewClient() {
             @Override

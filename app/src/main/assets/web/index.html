@@ -181,6 +181,15 @@ select.season{background:#242424;color:#fff;border:1px solid #4d4d4d;border-radi
 @keyframes i-rise{from{opacity:0;transform:translate3d(0,10%,0)}to{opacity:1;transform:none}}
 @keyframes i-b{from{opacity:0;transform:translate3d(0,18%,0) scale(.6)}to{opacity:1;transform:none}}
 @keyframes i-glow{0%{opacity:0}40%{opacity:1}100%{opacity:.85}}
+/* banner slideshow */
+.hdots{position:absolute;z-index:3;right:4vw;bottom:22%;display:flex;gap:6px}
+.hdots button{width:8px;height:8px;border-radius:4px;border:0;padding:0;background:rgba(255,255,255,.4);transition:width .3s,background .3s}
+.hdots button.on{width:24px;background:#fff}
+.harrow{position:absolute;z-index:3;top:40%;width:44px;height:64px;border:0;border-radius:4px;background:rgba(0,0,0,.35);color:#fff;font-size:30px;display:grid;place-items:center;opacity:0;transition:opacity .2s}
+.harrow.l{left:8px}.harrow.r{right:8px}
+.hero:hover .harrow{opacity:1}
+body.tvmode .harrow{display:none}
+body.tvmode .page-browse .hdots{bottom:24%}
 /* TV: banner stays put and follows the remote; rows slide up underneath */
 body.tvmode .page-browse .hero{position:fixed;top:0;left:0;right:0;height:64vh;min-height:0;max-height:none;z-index:4;-webkit-mask-image:linear-gradient(#000 74%,transparent);mask-image:linear-gradient(#000 74%,transparent)}
 body.tvmode .page-browse .hero .info{bottom:20%;width:min(46%,620px)}
@@ -334,7 +343,7 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '1.8.1';
+const CLIENT = 'Bighorn', VERSION = '1.9.0';
 const UPDATE_REPO = 'atemple-alt/Bighorn';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
 // A TV (remote control only). Inside the Android app, Android says so directly; elsewhere, guess from
@@ -938,7 +947,7 @@ async function renderBrowse(page, type, my) {
   const P = prefs();
   if (!P.on('hero')) { hero.remove(); rows.classList.add('nohero'); }
   else API.items({ includeItemTypes: types, sortBy: 'Random', imageTypes: 'Backdrop', limit: 8 })
-    .then(list => { const it = list.find(i => i.BackdropImageTags?.length); it ? fillHero(hero, it) : (hero.remove(), rows.classList.add('nohero')); })
+    .then(list => { const picks = list.filter(i => i.BackdropImageTags?.length); picks.length ? startCarousel(hero, picks) : (hero.remove(), rows.classList.add('nohero')); })
     .catch(() => { hero.remove(); rows.classList.add('nohero'); });
 
   const views = (await cached('views', API.views)).filter(v => type === 'Movie' ? v.CollectionType === 'movies' : type === 'Series' ? v.CollectionType === 'tvshows' : ['movies', 'tvshows'].includes(v.CollectionType));
@@ -995,12 +1004,49 @@ function showInHero(hero, it) {
   $('.btn.more', info).onclick = () => openDetails(hero._item);
 }
 
+// Featured banner slideshow: several random titles that rotate on their own and can be flipped
+// through with left/right (remote), the side arrows (mouse) or a swipe (touch).
+function startCarousel(hero, list) {
+  hero._list = list; hero._idx = 0;
+  hero.insertAdjacentHTML('beforeend', `<button class="harrow l" tabindex="-1" aria-label="Previous">${ICON.left}</button><button class="harrow r" tabindex="-1" aria-label="Next">${ICON.right}</button>
+    <div class="hdots">${list.map((_, i) => `<button tabindex="-1" aria-label="Title ${i + 1}"></button>`).join('')}</div>`);
+  $('.harrow.l', hero).onclick = () => carouselStep(hero, -1);
+  $('.harrow.r', hero).onclick = () => carouselStep(hero, 1);
+  $$('.hdots button', hero).forEach((d, i) => d.onclick = () => carouselGo(hero, i));
+  let x0 = null;
+  hero.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; }, { passive: true });
+  hero.addEventListener('touchend', e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50) carouselStep(hero, dx < 0 ? 1 : -1); });
+  carouselGo(hero, 0);
+  // rotate every 9 s, unless you're browsing the rows, a pop-up is open, or a video is playing
+  const timer = setInterval(() => {
+    if (!hero.isConnected) return clearInterval(timer);
+    if (document.hidden || $('.modal-ov') || $('.player') || $('.intro') || hero.matches(':hover')) return;
+    if (document.activeElement?.closest?.('.row')) return;
+    if (Date.now() - (hero._touched || 0) < 9000) return;
+    carouselStep(hero, 1, true);
+  }, 9000);
+}
+function carouselGo(hero, i, auto = false) {
+  const n = hero._list.length;
+  hero._idx = (i + n) % n;
+  if (!auto) hero._touched = Date.now();
+  const had = document.activeElement?.closest?.('.hero') ? (document.activeElement.classList.contains('more') ? '.btn.more' : '.btn.play') : null;
+  showInHero(hero, hero._list[hero._idx]);
+  $$('.hdots button', hero).forEach((d, k) => d.classList.toggle('on', k === hero._idx));
+  if (had) $(had, hero)?.focus({ preventScroll: true });
+}
+const carouselStep = (hero, d, auto = false) => carouselGo(hero, hero._idx + d, auto);
+
 // TV: when the remote lands on a card, show that title in the banner (after a short pause, so fast scrolling stays smooth)
 let heroTimer;
 addEventListener('focusin', e => {
   if (!TV_MODE) return;
-  const c = e.target.closest?.('.row .card');
   const hero = $('.page-browse .hero');
+  if (hero?._list && e.target.closest?.('.hero') && hero._item !== hero._list[hero._idx]) {
+    const btn = e.target.classList.contains('more') ? '.btn.more' : '.btn.play';
+    showInHero(hero, hero._list[hero._idx]); $(btn, hero)?.focus({ preventScroll: true }); return;
+  }
+  const c = e.target.closest?.('.row .card');
   if (!c || !c._it || !hero) return;
   clearTimeout(heroTimer);
   heroTimer = setTimeout(() => { if (document.activeElement === c) showInHero(hero, c._it); }, 280);
@@ -1514,6 +1560,14 @@ addEventListener('keydown', e => {
     if (isTyping(ae) && e.key === 'Escape') { ae.blur(); return; }
     if (bighornBack()) e.preventDefault();
     return;
+  }
+  if (dir && (dir === 'left' || dir === 'right') && ae?.closest?.('.page-browse .hero .hbtns')) {
+    const hero = ae.closest('.hero');
+    const onPlay = ae.classList.contains('play');
+    // Right from Play goes to More Info; past the ends flips to the next / previous title
+    if (hero._list && hero._list.length > 1 && ((dir === 'left' && onPlay) || (dir === 'right' && !onPlay))) {
+      e.preventDefault(); hidePreview(); carouselStep(hero, dir === 'right' ? 1 : -1); return;
+    }
   }
   if (dir) {
     if (isTyping(ae) && horizKey(e.key) && ae.value) return;
