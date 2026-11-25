@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Bighorn for Samsung TVs (Tizen web app). Packaged as Bighorn.wgt by the GitHub build;
+     install with Apps2Samsung ("Custom .wgt"), which signs it for your TV. -->
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
+        id="http://github.com/atemple-alt/Bighorn" version="VERSION_PLACEHOLDER" viewmodes="maximized">
+    <tizen:application id="BhrnTVApp1.Bighorn" package="BhrnTVApp1" required_version="6.0"/>
+    <tizen:profile name="tv-samsung"/>
+    <name>Bighorn</name>
+    <description>Netflix-style client for your Jellyfin server.</description>
+    <icon src="icon.png"/>
+    <content src="index.html"/>
+    <access origin="*" subdomains="true"/>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+    <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
+                   encryption="disable" install-location="auto" hwkey-event="enable"/>
+    <tizen:allow-navigation>*</tizen:allow-navigation>
+</widget>

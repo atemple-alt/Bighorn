@@ -329,6 +329,48 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 .ptrack i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--a1),var(--a2))}
 .ptime{font-variant-numeric:tabular-nums;color:#ddd;white-space:nowrap}
 .player.tv .nextep{bottom:100px}
+/* big TV screens laid out at full 1920x1080 (Samsung): larger text for couch distance */
+@media (min-width:1600px){
+  body.tvmode .hdr{height:96px;gap:48px}
+  body.tvmode .logo{font-size:42px}
+  body.tvmode .nav{gap:34px} body.tvmode .nav a{font-size:22px}
+  body.tvmode .search button{font-size:30px} body.tvmode .search.open input{font-size:22px;width:360px}
+  body.tvmode .avatar{width:50px;height:50px;font-size:24px}
+  body.tvmode .pmenu{top:62px;min-width:280px} body.tvmode .pmenu button,body.tvmode .pmenu .pm-user{font-size:21px;padding:12px 22px}
+  body.tvmode .meta{font-size:21px} body.tvmode .genres{font-size:19px}
+  body.tvmode .card .ttl{font-size:21px} body.tvmode .card .sub{font-size:17px}
+  body.tvmode .rowlink .explore{font-size:.6em}
+  body.tvmode .hep{font-size:26px}
+  body.tvmode .page-browse .hero .hov{font-size:23px}
+  body.tvmode .page-browse .hero .meta{font-size:21px;margin-bottom:14px}
+  body.tvmode .page-browse .hero .info{width:min(46%,900px)}
+  body.tvmode .page-browse .hero .hbtns .btn,body.tvmode .btn{font-size:23px}
+  body.tvmode .hdots button{width:12px;height:12px;border-radius:6px} body.tvmode .hdots button.on{width:36px}
+  body.tvmode .subhdr{top:100px} body.tvmode .subhdr h1{font-size:44px} body.tvmode .gbtn{font-size:21px} body.tvmode .gpanel a{font-size:20px;padding:10px 12px}
+  body.tvmode .modal{width:min(1400px,100%)} body.tvmode .mbody{padding:12px 64px 56px} body.tvmode .mh-info{left:64px;right:64px}
+  body.tvmode .mh-info .hlogo{max-height:190px} body.tvmode .mh-info h1{font-size:60px}
+  body.tvmode .mgrid p{font-size:22px} body.tvmode .kv{font-size:20px} body.tvmode .textbtn{font-size:20px}
+  body.tvmode .circle{width:54px;height:54px;font-size:25px} body.tvmode .modal .x{width:52px;height:52px;font-size:26px}
+  body.tvmode .sec-h h3{font-size:34px} body.tvmode select.season{font-size:22px;padding:12px 18px}
+  body.tvmode .ep{grid-template-columns:56px 280px 1fr 56px;gap:24px} body.tvmode .ep .n{font-size:34px}
+  body.tvmode .ep .et{font-size:22px} body.tvmode .ep .eo{font-size:19px} body.tvmode .epw{width:46px;height:46px;font-size:21px}
+  body.tvmode .sim{grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:22px}
+  body.tvmode .simc .sb b{font-size:22px} body.tvmode .simc .sb p{font-size:18px}
+  body.tvmode .gridpage{padding-top:140px} body.tvmode .gridpage h1{font-size:46px}
+  body.tvmode .bsel{font-size:20px} body.tvmode .bsel select{font-size:21px;padding:10px 14px} body.tvmode .bcount{font-size:20px}
+  body.tvmode .settings{max-width:1250px} body.tvmode .settings h2{font-size:32px} body.tvmode .sub2{font-size:20px}
+  body.tvmode .tg{font-size:23px;padding:22px 18px} body.tvmode .tg small{font-size:18px}
+  body.tvmode .sw{width:64px;height:36px;border-radius:18px} body.tvmode .sw i{width:30px;height:30px} body.tvmode .tg[aria-checked="true"] .sw i{transform:translateX(28px)}
+  body.tvmode .chip{font-size:21px;padding:11px 28px}
+  body.tvmode .auth-box{max-width:680px;padding:60px 70px 70px} body.tvmode .auth-box h1{font-size:44px}
+  body.tvmode .auth-box input{font-size:24px;padding:20px 22px} body.tvmode .btn-main,body.tvmode .btn-alt{font-size:23px;padding:18px}
+  body.tvmode .hint,body.tvmode .err{font-size:20px} body.tvmode .tile .nm{font-size:26px}
+  body.tvmode .auth-box.qc{max-width:860px} body.tvmode .qc-steps{font-size:22px} body.tvmode .qc-status{font-size:22px}
+  body.tvmode .ptitle{font-size:32px} body.tvmode .ptitle span{font-size:24px} body.tvmode .pbar{font-size:26px}
+  body.tvmode .skipbtn,body.tvmode .nextep{font-size:26px;padding:16px 32px}
+  body.tvmode .toast{font-size:22px;padding:16px 26px}
+  body.tvmode .upd-t{font-size:22px} body.tvmode .upd-s{font-size:18px} body.tvmode .ver{font-size:16px}
+}
 @media (max-width:800px){
   .hdr{gap:16px}.logo{font-size:22px}
   .nav{gap:12px}.nav a{font-size:12px}
@@ -349,12 +391,17 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '2.0.0';
+const CLIENT = 'Bighorn', VERSION = '2.1.0';
 const UPDATE_REPO = 'atemple-alt/Bighorn';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
 // A TV (remote control only). Inside the Android app, Android says so directly; elsewhere, guess from
 // the lack of a touchscreen and mouse.
-const TV_MODE = (() => {
+// Samsung TVs (Tizen)
+const IN_TIZEN = typeof window.tizen !== 'undefined' || /Tizen/i.test(navigator.userAgent);
+// Samsung remotes send number codes for some buttons; turn them into standard key names.
+const TIZEN_KEYS = { 10009: 'Back', 10252: 'MediaPlayPause', 415: 'MediaPlay', 19: 'MediaPause', 417: 'MediaFastForward', 412: 'MediaRewind', 413: 'MediaStop' };
+const keyOf = e => (IN_TIZEN && TIZEN_KEYS[e.keyCode]) || e.key;
+const TV_MODE = IN_TIZEN || (() => {
   try { if (window.BighornNative?.isTv) return !!window.BighornNative.isTv(); } catch {}
   return !(navigator.maxTouchPoints > 0 || matchMedia('(pointer:fine)').matches);
 })();
@@ -523,6 +570,16 @@ window.bighornNativeDone = res => {
     return play(s.next, s.queue ? { queue: s.queue.slice(1), fromStart: true } : {});
   if (!$('.modal-ov')) route();
 };
+
+// Samsung 2025 TVs play these directly (HEVC/HDR, Dolby Digital/Plus, MKV); anything else is converted by the server.
+function tizenDeviceProfile() {
+  return {
+    MaxStreamingBitrate: 120000000, MaxStaticBitrate: 120000000,
+    DirectPlayProfiles: [{ Container: 'mp4,m4v,mov,mkv,webm,ts,m2ts,mpegts', Type: 'Video', VideoCodec: 'h264,hevc,vp9,av1', AudioCodec: 'aac,mp3,ac3,eac3,opus,flac,vorbis' }],
+    TranscodingProfiles: [{ Container: 'ts', Type: 'Video', VideoCodec: 'h264', AudioCodec: 'aac,ac3,eac3', Context: 'Streaming', Protocol: 'hls', MaxAudioChannels: '6', MinSegments: 1, BreakOnNonKeyFrames: true }],
+    ContainerProfiles: [], CodecProfiles: [], SubtitleProfiles: [],
+  };
+}
 
 function deviceProfile() {
   const v = document.createElement('video');
@@ -1432,10 +1489,11 @@ async function play(item, opts = {}) {
     const it = await API.item(item.Id);
     const start = opts.startTicks != null ? opts.startTicks : opts.fromStart ? 0 : (it.UserData?.PlaybackPositionTicks || 0);
     const native = useNativePlayer();
-    const pb = await API.playbackInfo(it.Id, start, native ? {
-      profile: nativeDeviceProfile(),
-      body: { SubtitleStreamIndex: -1, ...(opts.forceTranscode ? { EnableDirectPlay: false } : {}) },
-    } : {});
+    const force = opts.forceTranscode ? { EnableDirectPlay: false } : {};
+    const pb = await API.playbackInfo(it.Id, start,
+      native ? { profile: nativeDeviceProfile(), body: { SubtitleStreamIndex: -1, ...force } }
+      : IN_TIZEN ? { profile: tizenDeviceProfile(), body: { SubtitleStreamIndex: -1, ...force } }
+      : { body: force });
     if (pb.ErrorCode) throw new Error(pb.ErrorCode);
     const ms = pb.MediaSources?.[0]; if (!ms) throw new Error('No media source');
     let url, method;
@@ -1448,7 +1506,7 @@ async function play(item, opts = {}) {
       if (!/api_key=/i.test(url)) url += `&api_key=${S.token}`;
     } else throw new Error("This file can't be played in this browser.");
     if (native) return playNative({ it, url, method, ms, psid: pb.PlaySessionId, start, opts });
-    openPlayer({ it, url, method, ms, psid: pb.PlaySessionId, start, queue: opts.queue });
+    openPlayer({ it, url, method, ms, psid: pb.PlaySessionId, start, queue: opts.queue, opts });
   } catch (e) { toast('Playback failed: ' + e.message); }
 }
 
@@ -1521,13 +1579,20 @@ function openPlayer(p) {
   };
   nb.onclick = () => { const n = next; close(); goNext(n); };
   v.onended = () => { const n = next; close(); if (n) goNext(n); };
-  v.onerror = () => toast('The video could not be loaded.');
+  v.onerror = () => {
+    // A file the TV/browser can't play directly: switch to a stream the server converts, from the same spot.
+    if (p.method === 'DirectPlay' && !p.opts?.forceTranscode) {
+      const pos = Math.floor((v.currentTime || 0) * 1e7) || p.start;
+      toast('That file needs converting for this screen, switching streams…', 3000);
+      close(); play(it, { ...(p.opts || {}), forceTranscode: true, startTicks: pos });
+    } else toast('The video could not be loaded.');
+  };
 
   let idle;
   function wake() { el.classList.remove('idle'); clearTimeout(idle); idle = setTimeout(() => { if (!v.paused) el.classList.add('idle'); }, 3500); }
   el.onmousemove = wake; wake();
   const onKey = e => {
-    const k = e.key; wake();
+    const k = keyOf(e); wake();
     if (k === 'Escape' && document.fullscreenElement) return;
     if (BACK_KEYS.includes(k)) { e.preventDefault(); close(); }
     else if (k === 'Enter' && document.activeElement === nb && nb.classList.contains('show')) return;
@@ -1535,6 +1600,7 @@ function openPlayer(p) {
     else if (k === 'Enter' || k === ' ' || k === 'MediaPlayPause') { e.preventDefault(); v.paused ? v.play() : v.pause(); }
     else if (k === 'MediaPlay') v.play();
     else if (k === 'MediaPause') v.pause();
+    else if (k === 'MediaStop') { e.preventDefault(); close(); }
     else if (k === 'ArrowRight' || k === 'MediaFastForward') { e.preventDefault(); v.currentTime = Math.min((v.duration || 1e9) - 1, v.currentTime + 10); }
     else if (k === 'ArrowLeft' || k === 'MediaRewind') { e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - 10); }
     else if (k === 'ArrowUp') { e.preventDefault(); (nb.classList.contains('show') ? nb : $('.back', el)).focus(); }
@@ -1559,7 +1625,7 @@ function openPlayer(p) {
 }
 
 /* ---------- remote / keyboard navigation ---------- */
-const BACK_KEYS = ['Escape', 'Backspace', 'BrowserBack', 'GoBack'];
+const BACK_KEYS = ['Escape', 'Backspace', 'BrowserBack', 'GoBack', 'Back', 'XF86Back'];
 const FOCUSABLE = 'a[href],button:not([disabled]),input,select,[tabindex]';
 const isTyping = el => el && el.matches('input,textarea');
 function navRoot() { return $('.player') || $('.modal-ov') || document.body; }
@@ -1623,14 +1689,16 @@ window.bighornBack = () => {
   return false;
 };
 addEventListener('keydown', e => {
-  const dir = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[e.key];
-  if (dir || e.key === 'Enter') document.body.classList.add('kbd');
+  const key = keyOf(e);
+  const dir = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[key];
+  if (dir || key === 'Enter') document.body.classList.add('kbd');
   if ($('.player')) return; // the player handles its own keys
   const ae = document.activeElement;
-  if (BACK_KEYS.includes(e.key)) {
-    if (e.key === 'Backspace' && isTyping(ae)) return;
-    if (isTyping(ae) && e.key === 'Escape') { ae.blur(); return; }
+  if (BACK_KEYS.includes(key)) {
+    if (key === 'Backspace' && isTyping(ae)) return;
+    if (isTyping(ae) && (key === 'Escape' || key === 'Back')) { ae.blur(); return; }
     if (bighornBack()) e.preventDefault();
+    else if (IN_TIZEN) { e.preventDefault(); try { tizen.application.getCurrentApplication().exit(); } catch {} }
     return;
   }
   if (dir && (dir === 'left' || dir === 'right') && ae?.closest?.('.page-browse .hero .hbtns')) {
@@ -1642,10 +1710,10 @@ addEventListener('keydown', e => {
     }
   }
   if (dir) {
-    if (isTyping(ae) && horizKey(e.key) && ae.value) return;
+    if (isTyping(ae) && horizKey(key) && ae.value) return;
     e.preventDefault(); hidePreview(); moveFocus(dir); return;
   }
-  if ((e.key === 'Enter' || e.key === ' ') && ae && ae !== document.body && !ae.matches('a,button,input,select,textarea')) { e.preventDefault(); ae.click(); }
+  if ((key === 'Enter' || key === ' ') && ae && ae !== document.body && !ae.matches('a,button,input,select,textarea')) { e.preventDefault(); ae.click(); }
 });
 const horizKey = k => k === 'ArrowLeft' || k === 'ArrowRight';
 addEventListener('pointermove', e => { if (e.pointerType === 'mouse') document.body.classList.remove('kbd'); });
@@ -1925,7 +1993,7 @@ async function checkForUpdate(manual = false) {
     if (!r.ok) throw new Error('GitHub said ' + r.status);
     const rel = await r.json();
     const latest = String(rel.tag_name || '').replace(/^v/i, '');
-    const apk = (rel.assets || []).find(a => /\.apk$/i.test(a.name));
+    const apk = (rel.assets || []).find(a => (IN_TIZEN ? /\.wgt$/i : /\.apk$/i).test(a.name));
     if (!/^\d+\.\d+/.test(latest) || !isNewer(latest, VERSION)) { if (manual) toast(`You're up to date (Bighorn ${VERSION}).`, 2600); return null; }
     const u = { version: latest, url: apk?.browser_download_url || `https://github.com/${UPDATE_REPO}/releases/latest` };
     showUpdateBanner(u, manual);
@@ -1942,7 +2010,7 @@ function showUpdateBanner(u, focus) {
   const status = $('.upd-s', b), go = $('.upd-go', b);
   $('.upd-later', b).onclick = () => b.remove();
   go.onclick = () => {
-    if (!canInstall) { status.innerHTML = `Download it from <b>${esc(u.url)}</b>`; return; }
+    if (!canInstall) { status.innerHTML = IN_TIZEN ? 'Reinstall it with Apps2Samsung (Custom .wgt). The new Bighorn.wgt is on the GitHub release page.' : `Download it from <b>${esc(u.url)}</b>`; return; }
     go.disabled = true; status.textContent = 'Starting…';
     window.BighornNative.installUpdate(u.url);
   };
@@ -1962,11 +2030,14 @@ function showUpdateBanner(u, focus) {
 
 /* ---------- boot ---------- */
 document.body.classList.toggle('tvmode', TV_MODE);
-if (IN_APP || S.token) playIntro();
+if (IN_TIZEN) {
+  try { ['MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaFastForward', 'MediaRewind', 'MediaStop'].forEach(k => tizen.tvinputdevice.registerKey(k)); } catch {}
+}
+if (IN_APP || IN_TIZEN || S.token) playIntro();
 if (S.token) { renderShell(); route(); }
 else if (S.server) renderProfiles();
 else renderConnect();
-if (IN_APP) setTimeout(() => checkForUpdate(false), 7000);
+if (IN_APP || IN_TIZEN) setTimeout(() => checkForUpdate(false), 7000);
 </script>
 </body>
 </html>

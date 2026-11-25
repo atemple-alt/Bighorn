@@ -46,10 +46,20 @@ jobs:
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk Bighorn.apk
 
+      # Samsung TV version: the same interface, packaged as a Tizen web app
+      - name: Package Samsung TV app (Bighorn.wgt)
+        run: |
+          mkdir -p wgt
+          cp app/src/main/assets/web/index.html app/src/main/assets/web/hls.min.js tizen/icon.png wgt/
+          sed "s/VERSION_PLACEHOLDER/${APP_VERSION}/" tizen/config.xml > wgt/config.xml
+          (cd wgt && zip -qr ../Bighorn.wgt .)
+
       - uses: actions/upload-artifact@v4
         with:
-          name: Bighorn-apk
-          path: Bighorn.apk
+          name: Bighorn-apps
+          path: |
+            Bighorn.apk
+            Bighorn.wgt
 
       # Publishes each build as a release, so the newest APK is always at:
       # https://github.com/<you>/<repo>/releases/latest/download/Bighorn.apk
@@ -60,5 +70,7 @@ jobs:
           # Tagged with the app version (e.g. v1.6.0); the app compares this tag with its own version.
           tag_name: v${{ env.APP_VERSION }}
           name: Bighorn ${{ env.APP_VERSION }}
-          files: Bighorn.apk
+          files: |
+            Bighorn.apk
+            Bighorn.wgt
           make_latest: true
