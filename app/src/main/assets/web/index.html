@@ -158,6 +158,14 @@ select.season{background:#242424;color:#fff;border:1px solid #4d4d4d;border-radi
 /* grid pages */
 .gridpage{padding:110px var(--pad) 80px}
 .gridpage h1{font-size:clamp(22px,2.4vw,38px);margin:0 0 24px}
+.ssec{margin-bottom:4.5vw}
+.ssh{display:flex;align-items:center;gap:16px;font-size:clamp(18px,1.6vw,28px);margin:0 0 18px;font-weight:600}
+.ssh small{display:block;font-size:.6em;color:var(--muted);font-weight:400;margin-top:2px}
+.sface{width:64px;height:64px;border-radius:50%;object-fit:cover;flex:none;background:#2a2a35}
+.sinit{display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;background:linear-gradient(135deg,var(--a1),var(--a2))}
+.plink{color:inherit;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.3)}
+.plink:hover,.plink:focus{color:#fff;border-bottom-color:#fff;outline:0}
+body.tvmode .ssh{font-size:34px} body.tvmode .sface{width:84px;height:84px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--card-w),1fr));gap:3.2vw .4vw}
 .grid .card{flex:none;width:100%}
 .empty{color:var(--muted);font-size:16px;padding:40px 0}
@@ -391,7 +399,7 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '2.1.1';
+const CLIENT = 'Bighorn', VERSION = '2.2.0';
 const UPDATE_REPO = 'atemple-alt/Bighorn';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
 // A TV (remote control only). Inside the Android app, Android says so directly; elsewhere, guess from
@@ -486,6 +494,8 @@ const API = {
   nextUp: seriesId => call('/Shows/NextUp', { query: { userId: S.userId, seriesId, limit: 24, fields: FIELDS, enableImageTypes: IMG_TYPES } }).then(r => r.Items || []),
   latest: (parentId, types) => call('/Items/Latest', { query: { userId: S.userId, parentId, includeItemTypes: types, limit: 24, fields: FIELDS, enableImageTypes: IMG_TYPES } }),
   items: q => API.itemsPage(q).then(r => r.Items || []),
+  persons: term => call('/Persons', { query: { userId: S.userId, searchTerm: term, limit: 6, enableImageTypes: 'Primary' } }).then(r => r.Items || []),
+  byPerson: id => API.items({ personIds: id, includeItemTypes: 'Movie,Series', sortBy: 'ProductionYear,SortName', sortOrder: 'Descending', limit: 80 }),
   itemsPage: q => call('/Items', { query: { userId: S.userId, recursive: true, fields: FIELDS, enableImageTypes: IMG_TYPES, ...q } }),
   item: id => call(`/Items/${id}`, { query: { userId: S.userId } }),
   seasons: id => call(`/Shows/${id}/Seasons`, { query: { userId: S.userId } }).then(r => r.Items || []),
@@ -794,7 +804,7 @@ function renderShell() {
   app.innerHTML = `<header class="hdr"><a class="logo" href="#/home">Bighorn</a>
     <nav class="nav"><a href="#/home" data-r="home">Home</a><a href="#/tv" data-r="tv">TV Shows</a><a href="#/movies" data-r="movies">Movies</a><a href="#/list" data-r="list">My List</a></nav>
     <div class="hsp"></div>
-    <div class="search"><button aria-label="Search">${ICON.search}</button><input placeholder="Titles, people, genres"></div>
+    <div class="search"><button aria-label="Search">${ICON.search}</button><input placeholder="Titles or actors"></div>
     <div class="prof"><div class="avatar" tabindex="0" role="button" aria-label="Profile menu" style="${url ? `background-image:url('${url}')` : `background:hsl(${hue(S.user.Name)} 55% 42%)`}">${url ? '' : esc(S.user.Name[0].toUpperCase())}</div>
       <div class="pmenu"><div class="pm-user">${esc(S.user.Name)} · ${esc(S.serverName || '')}</div><button data-a="settings">Settings</button><button data-a="switch">Switch Profile</button><button data-a="server">Change Server</button><button data-a="out">Sign Out</button></div></div>
   </header><main id="page"></main>${S.demo ? '<div class="demo-flag">Demo mode — sample data</div>' : ''}`;
@@ -841,8 +851,8 @@ async function route() {
     else if (name === 'list') await renderGrid(page, 'My List', API.items({ filters: 'IsFavorite', includeItemTypes: 'Movie,Series', sortBy: 'SortName', limit: 200 }), "Add shows and movies with the + button and they'll show up here.");
     else if (name === 'search') {
       const q = params.get('q') || ''; const inp = $('.search input');
-      if (inp && !inp.value) { inp.value = q; $('.search').classList.add('open'); }
-      await renderGrid(page, `Results for “${q}”`, API.items({ searchTerm: q, includeItemTypes: 'Movie,Series,BoxSet', limit: 60 }), 'No matches. Try a different title.');
+      if (inp && document.activeElement !== inp) { inp.value = q; $('.search').classList.add('open'); }
+      await renderSearch(page, q, my);
     }
     else if (name === 'settings') await renderSettings(page);
     else if (name === 'browse') await renderGenreBrowse(page, params, my);
@@ -1250,6 +1260,38 @@ async function renderGrid(page, title, promise, emptyMsg) {
   items.forEach(it => grid.append(card(it)));
 }
 
+/* ---------- search: titles and people in one box ---------- */
+async function renderSearch(page, q, my) {
+  document.title = `Search: ${q} · Bighorn`;
+  page.innerHTML = `<div class="gridpage srch"><h1>Results for “${esc(q)}”</h1><div class="grid">${'<div class="card skel"></div>'.repeat(12)}</div></div>`;
+  const titlesP = API.items({ searchTerm: q, includeItemTypes: 'Movie,Series,BoxSet', limit: 60 });
+  // people whose name matches, each with the movies and shows they're in
+  const peopleP = (q.length < 2 ? Promise.resolve([]) : API.persons(q).catch(() => []))
+    .then(ps => Promise.all(ps.map(p => API.byPerson(p.Id).then(items => ({ p, items })).catch(() => ({ p, items: [] })))));
+  const [titles, people] = await Promise.all([titlesP, peopleP]);
+  if (my !== routeToken) return;
+  const wrap = $('.srch', page); $('.grid', wrap).remove();
+  const found = people.filter(x => x.items.length);
+  // if the search is clearly a person's name, show them first
+  const exact = found.some(x => x.p.Name.toLowerCase() === q.toLowerCase());
+  const titleSec = () => {
+    if (!titles.length) return;
+    const sec = h(`<section class="ssec">${found.length ? '<h2 class="ssh">Titles</h2>' : ''}<div class="grid"></div></section>`);
+    titles.forEach(it => $('.grid', sec).append(card(it)));
+    wrap.append(sec);
+  };
+  const peopleSecs = () => found.forEach(({ p, items }) => {
+    const tag = p.ImageTags?.Primary || p.PrimaryImageTag;
+    const face = tag && !S.demo ? `<img class="sface" alt="" src="${img(p.Id, 'Primary', 160, tag)}">`
+      : `<span class="sface sinit">${esc(p.Name.split(/\s+/).map(w => w[0]).slice(0, 2).join(''))}</span>`;
+    const sec = h(`<section class="ssec"><h2 class="ssh">${face}<span>${esc(p.Name)}<small>${items.length} ${items.length === 1 ? 'title' : 'titles'}</small></span></h2><div class="grid"></div></section>`);
+    items.forEach(it => $('.grid', sec).append(card(it)));
+    wrap.append(sec);
+  });
+  if (exact) { peopleSecs(); titleSec(); } else { titleSec(); peopleSecs(); }
+  if (!titles.length && !found.length) wrap.append(h(`<p class="empty">No movies, shows or people match “${esc(q)}”.</p>`));
+}
+
 /* ---------- details modal ---------- */
 function closeAllOverlays() { hidePreview(); $$('.modal-ov,.player').forEach(e => e.remove()); document.body.classList.remove('noscroll'); }
 let lastFocus = null;
@@ -1356,8 +1398,9 @@ async function openDetails(item, opts = {}) {
   playBtn.onclick = () => play(playTarget);
   playBtn.focus({ preventScroll: true });
 
-  const cast = (it.People || []).filter(p => p.Type === 'Actor').slice(0, 5).map(p => esc(p.Name)).join(', ');
-  const dirs = (it.People || []).filter(p => p.Type === 'Director').map(p => esc(p.Name)).join(', ');
+  const plink = p => `<a class="plink" href="#/search?q=${encodeURIComponent(p.Name)}">${esc(p.Name)}</a>`;
+  const cast = (it.People || []).filter(p => p.Type === 'Actor').slice(0, 5).map(plink).join(', ');
+  const dirs = (it.People || []).filter(p => p.Type === 'Director').map(plink).join(', ');
   const body = $('.mbody', ov);
   body.innerHTML = `<div class="mgrid"><div>${metaLine(it, true)}${it.Taglines?.[0] ? `<p><b>${esc(it.Taglines[0])}</b></p>` : ''}<p>${esc(it.Overview || '')}</p></div>
     <div>${cast ? `<div class="kv"><b>Cast:</b> ${cast}</div>` : ''}${dirs ? `<div class="kv"><b>Director:</b> ${dirs}</div>` : ''}
@@ -1847,7 +1890,8 @@ function mock(path, { method, body, query: q }) {
     let r = D.items.filter(i => (!types ? i.Type !== 'BoxSet' : types.includes(i.Type)));
     if (q.genreIds) r = r.filter(i => i.GenreItems.some(g => g.Id === q.genreIds));
     if (q.filters === 'IsFavorite') r = r.filter(i => i.UserData.IsFavorite);
-    if (q.searchTerm) { const s = q.searchTerm.toLowerCase(); r = r.filter(i => i.Name.toLowerCase().includes(s) || i.Genres.some(g => g.toLowerCase().includes(s)) || i.People.some(p => p.Name.toLowerCase().includes(s))); }
+    if (q.searchTerm) { const s = q.searchTerm.toLowerCase(); r = r.filter(i => i.Name.toLowerCase().includes(s)); }
+    if (q.personIds) { const n = q.personIds.replace(/^p:/, ''); r = r.filter(i => i.People.some(p => p.Name === n)); }
     const st = +q.startIndex || 0, sorted = sortItems(r);
     return { Items: sorted.slice(st, st + (+q.limit || sorted.length)).map(i => i.Type === 'Series' ? seriesInfo(i) : i), TotalRecordCount: sorted.length, StartIndex: st };
   }
@@ -1860,6 +1904,7 @@ function mock(path, { method, body, query: q }) {
   }
   if ((m = path.match(/^\/Items\/([^/]+)\/Similar$/))) { const it = D.byId[m[1]]; return { Items: lim(D.items.filter(i => i.Id !== it.Id && i.Type === it.Type && i.Genres.some(g => it.Genres.includes(g)))).map(i => i.Type === 'Series' ? seriesInfo(i) : i) }; }
   if ((m = path.match(/^\/UserFavoriteItems\/([^/]+)$/))) { D.byId[m[1]].UserData.IsFavorite = method === 'POST'; return D.byId[m[1]].UserData; }
+  if (path === '/Persons') { const s = String(q.searchTerm || '').toLowerCase(); const names = [...new Set(D.items.flatMap(i => i.People.map(p => p.Name)))].filter(n => n.toLowerCase().includes(s)).sort(); return { Items: lim(names).map(n => ({ Name: n, Id: 'p:' + n, Type: 'Person', ImageTags: {} })) }; }
   if (path === '/Genres') { const set = new Set(D.items.filter(i => !types || types.includes(i.Type)).flatMap(i => i.Genres)); return { Items: [...set].sort().map(g => ({ Name: g, Id: D.gid(g) })) }; }
   throw new Error('Not available in demo: ' + path);
 }
