@@ -50,7 +50,8 @@ jobs:
       - name: Package Samsung TV app (Bighorn.wgt)
         run: |
           mkdir -p wgt
-          cp app/src/main/assets/web/index.html app/src/main/assets/web/hls.min.js tizen/icon.png wgt/
+          python3 tizen/build_wgt.py app/src/main/assets/web/index.html wgt
+          cp app/src/main/assets/web/hls.min.js tizen/icon.png wgt/
           sed "s/VERSION_PLACEHOLDER/${APP_VERSION}/" tizen/config.xml > wgt/config.xml
           (cd wgt && zip -qr ../Bighorn.wgt .)
 
