@@ -306,6 +306,21 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 .genres-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));column-gap:24px;border-top:0}
 .genres-list.dim{opacity:.35}
 .gcount{display:flex;flex-wrap:wrap;gap:10px}
+.saver{position:fixed;inset:0;z-index:2000;background:#000;overflow:hidden;animation:svin 1.2s ease}
+.saver.out{opacity:0;transition:opacity .5s}
+@keyframes svin{from{opacity:0}to{opacity:1}}
+.sv-img{position:absolute;inset:-6%;background:#000 center/cover no-repeat;opacity:0;transition:opacity 2.5s ease;will-change:transform,opacity}
+.sv-img.on{opacity:.9}
+.sv-img.pan0{animation:pan0 16s linear forwards}.sv-img.pan1{animation:pan1 16s linear forwards}
+.sv-img.pan2{animation:pan2 16s linear forwards}.sv-img.pan3{animation:pan3 16s linear forwards}
+@keyframes pan0{from{transform:scale(1.02) translate(-2%,-1%)}to{transform:scale(1.1) translate(2%,1%)}}
+@keyframes pan1{from{transform:scale(1.1) translate(2%,0)}to{transform:scale(1.02) translate(-2%,-1%)}}
+@keyframes pan2{from{transform:scale(1.04) translate(0,2%)}to{transform:scale(1.12) translate(-1%,-2%)}}
+@keyframes pan3{from{transform:scale(1.12) translate(-2%,1%)}to{transform:scale(1.03) translate(2%,-1%)}}
+.sv-txt{position:absolute;max-width:34vw;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.8);transition:opacity 1s;font-weight:600}
+.sv-txt.tl{left:5vw;top:6vh}.sv-txt.tr{right:5vw;top:6vh;text-align:right}.sv-txt.br{right:5vw;bottom:7vh;text-align:right}.sv-txt.tr img,.sv-txt.br img{margin-left:auto;object-position:right}.sv-txt.bl{left:5vw;bottom:7vh}
+.sv-title{font-size:clamp(22px,2.2vw,40px)}.sv-title img{display:block;width:clamp(180px,18vw,380px);height:auto;max-height:14vh;object-fit:contain;object-position:left;filter:drop-shadow(0 2px 10px rgba(0,0,0,.7))}
+.sv-clock{font-size:clamp(18px,1.6vw,30px);opacity:.8;margin-top:8px;font-weight:400}
 .chip{background:#2a2a2a;border:2px solid transparent;border-radius:20px;padding:8px 20px;font-size:15px}
 .chip[aria-pressed="true"]{background:#fff;color:#000;font-weight:700}
 .kbd .tg:focus{background:#2a2a2a;box-shadow:0 0 0 3px #fff}
@@ -399,7 +414,7 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '2.2.0';
+const CLIENT = 'Bighorn', VERSION = '2.3.0';
 const UPDATE_REPO = 'atemple-alt/Bighorn';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
 // A TV (remote control only). Inside the Android app, Android says so directly; elsewhere, guess from
@@ -506,7 +521,8 @@ const API = {
   // films in a collection, oldest first
   collectionItems: id => API.items({ parentId: id, sortBy: 'PremiereDate,ProductionYear,SortName', sortOrder: 'Ascending', limit: 200 }),
   segments: id => call(`/MediaSegments/${id}`).then(r => r.Items || []),
-  similar: id => call(`/Items/${id}/Similar`, { query: { userId: S.userId, limit: 12, fields: FIELDS } }).then(r => r.Items || []),
+  similar: (id, limit = 12) => call(`/Items/${id}/Similar`, { query: { userId: S.userId, limit, fields: FIELDS } }).then(r => r.Items || []),
+  recentlyWatched: types => API.items({ includeItemTypes: types, sortBy: 'DatePlayed', sortOrder: 'Descending', limit: 40 }).then(r => r.filter(i => i.UserData?.LastPlayedDate)),
   favorite: (id, on) => call(`/UserFavoriteItems/${id}`, { method: on ? 'POST' : 'DELETE', query: { userId: S.userId } }),
   genres: (types, parentId) => call('/Genres', { query: { userId: S.userId, includeItemTypes: types, parentId, recursive: true, sortBy: 'SortName' } }).then(r => r.Items || []),
   playbackInfo: (id, start, extra = {}) => call(`/Items/${id}/PlaybackInfo`, { method: 'POST', query: { userId: S.userId }, body: { UserId: S.userId, DeviceProfile: extra.profile || deviceProfile(), StartTimeTicks: start || 0, AutoOpenLiveStream: true, MaxStreamingBitrate: 120000000, ...(extra.body || {}) } }),
@@ -566,6 +582,7 @@ function nativeDeviceProfile() {
 let nativeSession = null;
 // The native player reports back here when it closes.
 window.bighornNativeDone = res => {
+  saverPoke();
   const s = nativeSession; nativeSession = null;
   if (!s) return;
   const posTicks = Math.max(0, Math.round((res.positionMs || 0) * 1e4));
@@ -871,6 +888,7 @@ const ROW_SETTINGS = [
   { id: 'hero', label: 'Featured banner', hint: 'The big title at the top of Home, TV Shows and Movies' },
   { id: 'resume', label: 'Continue Watching' },
   { id: 'nextup', label: 'Next Up', hint: 'Next episode of shows you are watching' },
+  { id: 'because', label: 'Because You Watched', hint: 'Suggestions based on what you watched recently' },
   { id: 'top10', label: 'Top 10 by Rating' },
   { id: 'mylist', label: 'My List', hint: 'Shown on Home' },
   { id: 'collections', label: 'Collections', hint: 'Box sets like trilogies and franchises (Home and Movies)' },
@@ -909,7 +927,10 @@ async function renderSettings(page) {
       <p class="sub2">Featured banner</p>
       <div class="gcount hstyle">${[['slideshow', 'Slideshow'], ['single', 'Single title']].map(([v, l]) => `<button class="chip" data-hs="${v}" aria-pressed="${(P.raw.heroStyle || 'slideshow') === v}">${l}</button>`).join('')}</div>
       <p class="sub2" style="margin:10px 0 18px">Slideshow rotates through several titles you can flip with left/right. Single title shows one featured title.</p>
-      <div class="tgs">${LOOK_SETTINGS.map(r => toggle(r.id, r.label, r.hint)).join('')}</div></section>
+      <div class="tgs">${LOOK_SETTINGS.map(r => toggle(r.id, r.label, r.hint)).join('')}</div>
+      <p class="sub2" style="margin:26px 0 10px">Screensaver</p>
+      <div class="gcount">${[0, 2, 5, 10, 15, 30].map(n => `<button class="chip" data-ss="${n}" aria-pressed="${saverMinutes() === n}">${n ? n + ' min' : 'Off'}</button>`).join('')}</div>
+      <p class="sub2" style="margin:10px 0 0">Slowly moving artwork from your library after this long with no button presses. Helps protect OLED screens.</p></section>
     ${nativePlayerAvailable() ? `<section><h2>Playback</h2><div class="tgs">${PLAYBACK_SETTINGS.map(r => toggle(r.id, r.label, r.hint)).join('')}</div></section>` : ''}
     <section><h2>Rows</h2><p class="sub2">Choose which rows appear on Home, TV Shows and Movies.</p>
       <div class="tgs">${ROW_SETTINGS.map(r => toggle(r.id, r.label, r.hint)).join('')}
@@ -936,6 +957,11 @@ async function renderSettings(page) {
       $$('.chip[data-hs]', box).forEach(x => x.setAttribute('aria-pressed', x === hs));
       setPref('heroStyle', hs.dataset.hs === 'slideshow' ? undefined : hs.dataset.hs);
       return;
+    }
+    const ss = e.target.closest('.chip[data-ss]');
+    if (ss) {
+      $$('.chip[data-ss]', box).forEach(x => x.setAttribute('aria-pressed', x === ss));
+      setPref('saver', +ss.dataset.ss); return;
     }
     const c = e.target.closest('.chip[data-n]');
     if (c) {
@@ -1044,6 +1070,7 @@ async function renderBrowse(page, type, my) {
   if (P.on('resume')) addRow(rows, 'Continue Watching', API.resume(type === 'Series' ? 'Episode' : type || undefined));
   if (type !== 'Movie' && P.on('nextup')) addRow(rows, 'Next Up', API.nextUp());
   for (const v of views.filter(v => P.on('latest:' + v.Id))) addRow(rows, views.length > 1 || !type ? `New in ${v.Name}` : 'Recently Added', API.latest(v.Id), { href: `#/browse?type=${v.CollectionType === 'movies' ? 'Movie' : 'Series'}&sort=1` });
+  if (P.on('because')) { const bh = h('<div></div>'); rows.append(bh); becauseRows(bh, type, my); }
   if (P.on('top10')) addRow(rows, `Top 10 ${type === 'Series' ? 'Shows' : 'Movies'} by Rating`, API.items({ includeItemTypes: type || 'Movie', sortBy: 'CommunityRating', sortOrder: 'Descending', limit: 10 }), { top10: true });
   if (type !== 'Series' && P.on('collections')) addRow(rows, 'Collections', API.collections(30), { href: '#/collections' });
   if (!type && P.on('mylist')) addRow(rows, 'My List', API.items({ filters: 'IsFavorite', includeItemTypes: 'Movie,Series', sortBy: 'DateCreated', sortOrder: 'Descending', limit: 30 }));
@@ -1053,6 +1080,24 @@ async function renderBrowse(page, type, my) {
   if (my !== routeToken) return;
   for (const g of shuffle(gs).slice(0, P.genreCount))
     addRow(genreHost, g.Name, API.items({ includeItemTypes: types, genreIds: g.Id, sortBy: 'Random', limit: 24 }), { min: 3, href: `#/browse?type=${encodeURIComponent(types)}&genre=${encodeURIComponent(g.Id)}` });
+}
+
+// "Because you watched X": titles similar to things watched recently (most recent first,
+// plus one other recent pick so the rows change a little between visits)
+async function becauseRows(host, type, my) {
+  const recent = await API.recentlyWatched(type === 'Movie' ? 'Movie' : type === 'Series' ? 'Episode' : 'Movie,Episode').catch(() => []);
+  if (my !== routeToken) return;
+  const seeds = [], seen = new Set();
+  for (const it of recent) {
+    const seed = it.Type === 'Episode' ? (it.SeriesId ? { Id: it.SeriesId, Name: it.SeriesName, Type: 'Series' } : null) : it;
+    if (!seed || seen.has(seed.Id)) continue;
+    seen.add(seed.Id); seeds.push(seed);
+    if (seeds.length >= 5) break;
+  }
+  const chosen = seeds.length ? [seeds[0], ...shuffle(seeds.slice(1)).slice(0, 1)] : [];
+  for (const sd of chosen)
+    addRow(host, `Because you watched ${sd.Name}`, API.similar(sd.Id, 24).then(list => list.filter(i =>
+      i.Id !== sd.Id && !i.UserData?.Played && (type ? i.Type === type : ['Movie', 'Series'].includes(i.Type)))), { min: 4 });
 }
 
 function fillHero(hero, it) {
@@ -1722,6 +1767,7 @@ function moveFocus(dir) {
 }
 // Back: player → menu → details → other page → home. Returns true if it handled it (the Android app asks this).
 window.bighornBack = () => {
+  if (saverOn()) { hideSaver(); return true; }
   if ($('.player')) { $('.player .back').click(); return true; }
   if ($('.upd')) { $('.upd').remove(); return true; }
   if ($('.subhdr.open')) { $('.subhdr').classList.remove('open'); $('.gbtn')?.focus(); return true; }
@@ -1887,6 +1933,7 @@ function mock(path, { method, body, query: q }) {
       const kids = D.byId[q.parentId]._kids.map(id => D.byId[id]).sort((a, b) => a.ProductionYear - b.ProductionYear);
       return { Items: kids, TotalRecordCount: kids.length };
     }
+    if (q.sortBy === 'DatePlayed') return { Items: lim([...D.items, ...D.eps].filter(i => i.UserData.LastPlayedDate && (!types || types.includes(i.Type))).sort((a, b) => b.UserData.LastPlayedDate.localeCompare(a.UserData.LastPlayedDate))) };
     let r = D.items.filter(i => (!types ? i.Type !== 'BoxSet' : types.includes(i.Type)));
     if (q.genreIds) r = r.filter(i => i.GenreItems.some(g => g.Id === q.genreIds));
     if (q.filters === 'IsFavorite') r = r.filter(i => i.UserData.IsFavorite);
@@ -2072,6 +2119,69 @@ function showUpdateBanner(u, focus) {
   };
   if (focus) go.focus();
 }
+
+/* ---------- screensaver ---------- */
+// After a few idle minutes: slow-panning backdrops from the library with the title and a clock,
+// which drift to a new corner each slide so nothing sits still on an OLED screen.
+const saverMinutes = () => { const v = prefs().raw.saver; return v === undefined ? (TV_MODE || IN_APP ? 5 : 0) : v; };
+let saverIdleAt = Date.now(), saverEl = null, saverTimer = null;
+const saverOn = () => !!saverEl;
+function saverPoke() { saverIdleAt = Date.now(); }
+['mousemove', 'mousedown', 'touchstart', 'wheel'].forEach(ev => addEventListener(ev, () => { if (saverOn()) hideSaver(); saverPoke(); }, { passive: true, capture: true }));
+addEventListener('keydown', e => {
+  saverPoke();
+  if (saverOn()) { e.preventDefault(); e.stopImmediatePropagation(); hideSaver(); }
+}, true);
+document.addEventListener('visibilitychange', saverPoke);
+function hideSaver() {
+  if (!saverEl) return;
+  clearTimeout(saverTimer); const el = saverEl; saverEl = null;
+  el.classList.add('out'); setTimeout(() => el.remove(), 600);
+  saverPoke();
+}
+async function showSaver() {
+  if (saverEl) return;
+  const el = saverEl = h(`<div class="saver" aria-hidden="true"><div class="sv-img"></div><div class="sv-img"></div><div class="sv-txt"><div class="sv-title"></div><div class="sv-clock"></div></div></div>`);
+  document.body.append(el);
+  let list = [];
+  try { list = (await API.items({ includeItemTypes: 'Movie,Series', sortBy: 'Random', imageTypes: 'Backdrop', limit: 40 })).filter(i => i.BackdropImageTags?.length); } catch {}
+  if (saverEl !== el) return;
+  const imgs = $$('.sv-img', el), txt = $('.sv-txt', el), clock = $('.sv-clock', el), title = $('.sv-title', el);
+  const corners = ['tl', 'tr', 'br', 'bl'];
+  let i = 0;
+  const tick = () => { clock.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
+  const next = () => {
+    if (saverEl !== el) return;
+    tick();
+    txt.className = 'sv-txt ' + corners[i % 4];
+    if (list.length) {
+      const it = list[i % list.length], url = backdrop(it, 1920), lg = logo(it, 500);
+      const pre = new Image();
+      pre.onload = () => {
+        if (saverEl !== el) return;
+        const on = imgs.find(x => x.classList.contains('on')), nx = imgs.find(x => x !== on);
+        nx.style.backgroundImage = `url("${url}")`;
+        nx.classList.remove('pan0', 'pan1', 'pan2', 'pan3'); void nx.offsetWidth; nx.classList.add('pan' + (i % 4), 'on');
+        on?.classList.remove('on');
+        title.innerHTML = lg ? `<img src="${lg}" alt="">` : esc(it.Name);
+        const li = $('img', title); if (li) li.onerror = () => { title.textContent = it.Name; };
+      };
+      pre.src = url;
+    }
+    i++;
+    saverTimer = setTimeout(next, 14000);
+  };
+  next();
+  // keep the clock current between slides
+  const ct = setInterval(() => { if (saverEl !== el) clearInterval(ct); else tick(); }, 20000);
+}
+setInterval(() => {
+  const mins = saverMinutes();
+  if (!mins || saverEl || !S.token || document.hidden) return;
+  // never over video, the intro, or while a dialog is mid-action
+  if ($('.player') || $('.intro') || nativeSession) { saverPoke(); return; }
+  if (Date.now() - saverIdleAt >= mins * 60000) showSaver();
+}, 5000);
 
 /* ---------- boot ---------- */
 document.body.classList.toggle('tvmode', TV_MODE);
