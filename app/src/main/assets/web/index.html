@@ -159,6 +159,30 @@ select.season{background:#242424;color:#fff;border:1px solid #4d4d4d;border-radi
 .gridpage{padding:110px var(--pad) 80px}
 .gridpage h1{font-size:clamp(22px,2.4vw,38px);margin:0 0 24px}
 .ssec{margin-bottom:4.5vw}
+.sperson{display:flex;align-items:center;gap:16px;color:inherit;text-decoration:none;border-radius:40px;padding-right:14px}
+.sperson:focus{outline:0;box-shadow:0 0 0 3px #fff}
+.ssh .cnt{display:inline;font-size:.7em;margin-left:6px}
+.people{margin-top:28px}
+.pstrip{display:flex;gap:18px;overflow-x:auto;padding:6px 4px 14px;scrollbar-width:none}
+.pstrip::-webkit-scrollbar{display:none}
+.pc{flex:none;width:120px;text-align:center;color:inherit;text-decoration:none;outline:0}
+.pface{display:block;width:104px;height:104px;margin:0 auto 8px;border-radius:50%;overflow:hidden;background:#2a2a35;border:3px solid transparent;transition:transform .15s,border-color .15s}
+.pface img{width:100%;height:100%;object-fit:cover;display:block}
+.pinit{display:flex;width:100%;height:100%;align-items:center;justify-content:center;font-size:32px;font-weight:600;color:#fff}
+.pc:hover .pface,.pc:focus .pface{border-color:#fff;transform:scale(1.06)}
+.pn{display:block;font-size:14px;font-weight:600;line-height:1.25}
+.pr{display:block;font-size:12.5px;color:var(--muted);line-height:1.25;margin-top:2px}
+.pertop{display:flex;gap:3vw;align-items:flex-start;margin-bottom:4vw}
+.pphoto{flex:none;width:clamp(160px,18vw,340px);aspect-ratio:2/3;border-radius:14px;overflow:hidden;background:#2a2a35;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.pphoto img{width:100%;height:100%;object-fit:cover;display:block}.pphoto .pinit{font-size:64px}
+.pinfo{flex:1;min-width:0;background:rgba(10,12,22,.55);border-radius:16px;padding:clamp(18px,2.2vw,40px);backdrop-filter:blur(6px)}
+.pinfo h1{margin:0 0 14px;font-size:clamp(28px,3vw,56px)}
+.pbio{line-height:1.55;color:#ddd;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;margin:16px 0 6px}
+.pbio.open{display:block}
+.pcount{margin-top:14px;color:var(--muted)}
+@media (max-width:700px){.pertop{flex-direction:column}.pphoto{width:46vw}}
+body.tvmode .pc{width:170px} body.tvmode .pface{width:150px;height:150px} body.tvmode .pn{font-size:20px} body.tvmode .pr{font-size:17px}
+body.tvmode .pinfo .kv,body.tvmode .pbio,body.tvmode .pcount{font-size:22px}
 .ssh{display:flex;align-items:center;gap:16px;font-size:clamp(18px,1.6vw,28px);margin:0 0 18px;font-weight:600}
 .ssh small{display:block;font-size:.6em;color:var(--muted);font-weight:400;margin-top:2px}
 .sface{width:64px;height:64px;border-radius:50%;object-fit:cover;flex:none;background:#2a2a35}
@@ -414,7 +438,7 @@ body.auth-on .auth-box{background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}
 <div id="app"></div>
 <script>
 'use strict';
-const CLIENT = 'Bighorn', VERSION = '2.3.0';
+const CLIENT = 'Bighorn', VERSION = '2.4.0';
 const UPDATE_REPO = 'atemple-alt/Bighorn';
 const IN_APP = /BighornApp/.test(navigator.userAgent);
 // A TV (remote control only). Inside the Android app, Android says so directly; elsewhere, guess from
@@ -861,6 +885,8 @@ async function route() {
   const page = $('#page'); const my = ++routeToken;
   page.innerHTML = ''; page.className = '';
   if (name !== 'search') scrollTo(0, 0);
+  const reopen = name !== 'person' && personReturn && personReturn.hash === location.hash ? personReturn.item : null;
+  if (name !== 'person') personReturn = null;
   try {
     if (name === 'tv') await renderBrowse(page, 'Series', my);
     else if (name === 'movies') await renderBrowse(page, 'Movie', my);
@@ -871,9 +897,11 @@ async function route() {
       if (inp && document.activeElement !== inp) { inp.value = q; $('.search').classList.add('open'); }
       await renderSearch(page, q, my);
     }
+    else if (name === 'person') await renderPerson(page, params, my);
     else if (name === 'settings') await renderSettings(page);
     else if (name === 'browse') await renderGenreBrowse(page, params, my);
     else await renderBrowse(page, null, my);
+    if (reopen && my === routeToken) openDetails(reopen);
   } catch (e) {
     if (my !== routeToken) return;
     page.innerHTML = `<div class="gridpage"><h1>Something went wrong</h1><p class="empty">${esc(e.message)}</p><button class="btn more">Retry</button></div>`;
@@ -1329,12 +1357,63 @@ async function renderSearch(page, q, my) {
     const tag = p.ImageTags?.Primary || p.PrimaryImageTag;
     const face = tag && !S.demo ? `<img class="sface" alt="" src="${img(p.Id, 'Primary', 160, tag)}">`
       : `<span class="sface sinit">${esc(p.Name.split(/\s+/).map(w => w[0]).slice(0, 2).join(''))}</span>`;
-    const sec = h(`<section class="ssec"><h2 class="ssh">${face}<span>${esc(p.Name)}<small>${items.length} ${items.length === 1 ? 'title' : 'titles'}</small></span></h2><div class="grid"></div></section>`);
+    const sec = h(`<section class="ssec"><h2 class="ssh"><a class="sperson" href="${personHref(p)}">${face}<span>${esc(p.Name)}<small>${items.length} ${items.length === 1 ? 'title' : 'titles'} · See all</small></span></a></h2><div class="grid"></div></section>`);
     items.forEach(it => $('.grid', sec).append(card(it)));
     wrap.append(sec);
   });
   if (exact) { peopleSecs(); titleSec(); } else { titleSec(); peopleSecs(); }
   if (!titles.length && !found.length) wrap.append(h(`<p class="empty">No movies, shows or people match “${esc(q)}”.</p>`));
+}
+
+/* ---------- people ---------- */
+let personReturn = null;
+const personHref = p => p.Id ? `#/person?id=${encodeURIComponent(p.Id)}` : `#/search?q=${encodeURIComponent(p.Name)}`;
+const initials = n => esc(String(n || '?').split(/\s+/).map(w => w[0]).slice(0, 2).join(''));
+function personFace(p, w = 240) {
+  const tag = p.PrimaryImageTag || p.ImageTags?.Primary;
+  return tag && !S.demo ? `<img loading="lazy" alt="" src="${img(p.Id, 'Primary', w, tag)}">` : `<span class="pinit" style="background:hsl(${hue(p.Name)} 45% 38%)">${initials(p.Name)}</span>`;
+}
+function peopleStrip(it) {
+  const order = { Actor: 0, GuestStar: 1, Director: 2, Writer: 3 };
+  const seen = new Set();
+  const ppl = (it.People || []).filter(p => p.Type in order && p.Id && !seen.has(p.Id + p.Type) && seen.add(p.Id + p.Type))
+    .sort((a, b) => order[a.Type] - order[b.Type]).slice(0, 30);
+  if (!ppl.length) return null;
+  const role = p => p.Type === 'Actor' || p.Type === 'GuestStar' ? (p.Role || '') : p.Type;
+  return h(`<div class="people"><div class="sec-h"><h3>Cast &amp; Crew</h3></div><div class="pstrip">${ppl.map(p =>
+    `<a class="pc" href="${personHref(p)}"><span class="pface">${personFace(p)}</span><span class="pn">${esc(p.Name)}</span><span class="pr">${esc(role(p))}</span></a>`).join('')}</div></div>`);
+}
+async function renderPerson(page, params, my) {
+  const id = params.get('id');
+  page.innerHTML = `<div class="gridpage person"><div class="spinner"></div></div>`;
+  const [p, items] = await Promise.all([API.item(id), API.byPerson(id).catch(() => [])]);
+  if (my !== routeToken) return;
+  document.title = `${p.Name} · Bighorn`;
+  const d = v => v ? new Date(v) : null;
+  const born = d(p.PremiereDate), died = d(p.EndDate);
+  const fmt = x => x.toLocaleDateString([], { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+  const age = born ? Math.floor(((died || new Date()) - born) / 31557600000) : null;
+  const movies = items.filter(i => i.Type === 'Movie'), shows = items.filter(i => i.Type === 'Series');
+  const box = $('.person', page);
+  box.innerHTML = `<div class="pertop"><div class="pphoto">${personFace(p, 600)}</div><div class="pinfo">
+      <h1>${esc(p.Name)}</h1>
+      ${born ? `<div class="kv"><b>Born:</b> ${fmt(born)}${died ? '' : ` (age ${age})`}</div>` : ''}
+      ${died ? `<div class="kv"><b>Died:</b> ${fmt(died)} (age ${age})</div>` : ''}
+      ${p.ProductionLocations?.[0] ? `<div class="kv"><b>Birthplace:</b> ${esc(p.ProductionLocations[0])}</div>` : ''}
+      ${p.Overview ? `<p class="pbio">${esc(p.Overview)}</p><button class="textbtn pmore" hidden>Read more</button>` : ''}
+      <div class="pcount">${[movies.length && `${movies.length} ${movies.length === 1 ? 'movie' : 'movies'}`, shows.length && `${shows.length} ${shows.length === 1 ? 'show' : 'shows'}`].filter(Boolean).join(' · ') || 'Nothing in your library yet'}</div>
+    </div></div>`;
+  const bio = $('.pbio', box), more = $('.pmore', box);
+  if (bio && bio.scrollHeight > bio.clientHeight + 4) {
+    more.hidden = false;
+    more.onclick = () => { const open = bio.classList.toggle('open'); more.textContent = open ? 'Show less' : 'Read more'; };
+  }
+  for (const [label, list] of [['Movies', movies], ['TV Shows', shows]]) {
+    if (!list.length) continue;
+    const sec = h(`<section class="ssec"><h2 class="ssh">${label} <small class="cnt">${list.length}</small></h2><div class="grid"></div></section>`);
+    list.forEach(it => $('.grid', sec).append(card(it)));
+    box.append(sec);
+  }
 }
 
 /* ---------- details modal ---------- */
@@ -1443,7 +1522,7 @@ async function openDetails(item, opts = {}) {
   playBtn.onclick = () => play(playTarget);
   playBtn.focus({ preventScroll: true });
 
-  const plink = p => `<a class="plink" href="#/search?q=${encodeURIComponent(p.Name)}">${esc(p.Name)}</a>`;
+  const plink = p => `<a class="plink" href="${personHref(p)}">${esc(p.Name)}</a>`;
   const cast = (it.People || []).filter(p => p.Type === 'Actor').slice(0, 5).map(plink).join(', ');
   const dirs = (it.People || []).filter(p => p.Type === 'Director').map(plink).join(', ');
   const body = $('.mbody', ov);
@@ -1489,6 +1568,14 @@ async function openDetails(item, opts = {}) {
     };
     if (start) { sel.value = start; loadEps(start); } else $('.eps', sec).innerHTML = '<p class="empty">No episodes found.</p>';
     sel.onchange = () => loadEps(sel.value);
+  }
+
+  const crew = peopleStrip(it);
+  if (crew) {
+    body.append(crew);
+    // Back on the person page returns here, with this title's details open again
+    crew.addEventListener('click', e => { if (e.target.closest('a.pc')) personReturn = { hash: location.hash, item: it }; });
+    $$('.plink', body).forEach(a => a.addEventListener('click', () => { personReturn = { hash: location.hash, item: it }; }));
   }
 
   if (it.Type !== 'BoxSet') API.similar(it.Id).then(list => {
@@ -1774,6 +1861,7 @@ window.bighornBack = () => {
   if ($('.prof.open')) { $('.prof').classList.remove('open'); $('.avatar')?.focus(); return true; }
   if ($('.modal-ov')) { closeModal(); return true; }
   const back = $('.auth .back'); if (back) { back.click(); return true; }
+  if (/^#\/person/.test(location.hash)) { if (personReturn) location.hash = personReturn.hash; else history.back(); return true; }
   if (S.token && !/^#?\/?(home)?$/.test(location.hash)) { location.hash = '#/home'; return true; }
   return false;
 };
@@ -1831,7 +1919,7 @@ const DEMO = (() => {
     return { Id: id, Name: name, Type: type, ProductionYear: 1994 + Math.floor(rnd() * 32), OfficialRating: pick(ratings), CommunityRating: +(5.2 + rnd() * 4.3).toFixed(1),
       Genres: gs, GenreItems: gs.map(g => ({ Name: g, Id: gid(g) })), Overview: pick(plots), Taglines: [],
       DateCreated: new Date(Date.now() - rnd() * 3e10).toISOString(), ImageTags: { ...tags }, BackdropImageTags: ['d'],
-      People: [...new Set([pick(people), pick(people), pick(people)])].map(n => ({ Name: n, Type: 'Actor' })).concat([{ Name: pick(people), Type: 'Director' }]),
+      People: [...new Set([pick(people), pick(people), pick(people)])].map(n => ({ Name: n, Id: 'p:' + n, Type: 'Actor', Role: pick(['Dr. Ellis Park', 'Captain Rowe', 'June', 'The Stranger', 'Marshal Kade', 'Nora Bell']) })).concat([(n => ({ Name: n, Id: 'p:' + n, Type: 'Director' }))(pick(people))]),
       Studios: [{ Name: pick(['Juniper Pictures', 'Northstar', 'Bright Mesa', 'Harbor & Co.']) }],
       UserData: { IsFavorite: rnd() < .22, Played: false, PlaybackPositionTicks: 0, PlayedPercentage: 0 } };
   };
@@ -1942,6 +2030,7 @@ function mock(path, { method, body, query: q }) {
     const st = +q.startIndex || 0, sorted = sortItems(r);
     return { Items: sorted.slice(st, st + (+q.limit || sorted.length)).map(i => i.Type === 'Series' ? seriesInfo(i) : i), TotalRecordCount: sorted.length, StartIndex: st };
   }
+  if ((m = path.match(/^\/Items\/(p:[^/]+)$/))) { const n = decodeURIComponent(m[1]).slice(2); return { Id: 'p:' + n, Name: n, Type: 'Person', ImageTags: {}, PremiereDate: '1971-06-02T00:00:00.0000000Z', ProductionLocations: ['Casper, Wyoming, USA'], Overview: `${n} is an actor and filmmaker known for quiet, character-driven work across film and television. `.repeat(4) }; }
   if ((m = path.match(/^\/Items\/([^/]+)$/))) { const it = D.byId[m[1]]; return it.Type === 'Series' ? seriesInfo(it) : it; }
   if ((m = path.match(/^\/Shows\/([^/]+)\/Seasons$/))) return { Items: D.seasons.filter(s => s.SeriesId === m[1]) };
   if ((m = path.match(/^\/Shows\/([^/]+)\/Episodes$/))) {
